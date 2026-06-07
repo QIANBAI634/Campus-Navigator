@@ -80,54 +80,68 @@ int DiaryManager::draftCount() const
     return loadDrafts().size();
 }
 
-// ========== 已发布日记管理 ==========
+// ========== 已发布日记管理（全局共享，static 方法） ==========
 
-QVector<DiaryEntry> DiaryManager::loadPublished() const
+QVector<DiaryEntry> DiaryManager::loadPublished(const QString& dataDir)
 {
     QVector<DiaryEntry> published;
-    QJsonArray arr = readJsonFile("published.json");
-    for (const auto& val : arr) {
+    QString fullPath = dataDir + "/published.json";
+    QFile file(fullPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return published;
+
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    for (const auto& val : doc.array())
         published.append(DiaryEntry::fromJson(val.toObject()));
-    }
     return published;
 }
 
-bool DiaryManager::savePublished(const QVector<DiaryEntry>& published) const
+bool DiaryManager::savePublished(const QString& dataDir,
+                                  const QVector<DiaryEntry>& published)
 {
+    QDir dir;
+    if (!dir.exists(dataDir)) dir.mkpath(dataDir);
+
     QJsonArray arr;
-    for (const auto& p : published) {
-        arr.append(p.toJson());
-    }
-    return writeJsonFile("published.json", arr);
+    for (const auto& p : published) arr.append(p.toJson());
+    QFile file(dataDir + "/published.json");
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+    file.close();
+    return true;
 }
 
-bool DiaryManager::publishDraft(int draftIndex)
+bool DiaryManager::publishDraft(int draftIndex, const QString& dataDir,
+                                 const QString& campusName, const QString& nickname)
 {
     QVector<DiaryEntry> drafts = loadDrafts();
     if (draftIndex < 0 || draftIndex >= drafts.size()) return false;
 
     DiaryEntry entry = drafts[draftIndex];
-    entry.publishedAt = QDateTime::currentDateTime().toString(Qt::ISODate);
+    entry.publishedAt  = QDateTime::currentDateTime().toString(Qt::ISODate);
+    entry.campusName   = campusName;
+    entry.userNickname = nickname;
 
-    QVector<DiaryEntry> published = loadPublished();
+    QVector<DiaryEntry> published = loadPublished(dataDir);
     published.prepend(entry);
 
     drafts.removeAt(draftIndex);
 
-    return savePublished(published) && saveDrafts(drafts);
+    return savePublished(dataDir, published) && saveDrafts(drafts);
 }
 
-bool DiaryManager::removePublished(int index)
+bool DiaryManager::removePublished(const QString& dataDir, int index)
 {
-    QVector<DiaryEntry> published = loadPublished();
+    QVector<DiaryEntry> published = loadPublished(dataDir);
     if (index < 0 || index >= published.size()) return false;
     published.removeAt(index);
-    return savePublished(published);
+    return savePublished(dataDir, published);
 }
 
-int DiaryManager::publishedCount() const
+int DiaryManager::publishedCount(const QString& dataDir)
 {
-    return loadPublished().size();
+    return loadPublished(dataDir).size();
 }
 
 // ========== 图片管理 ==========

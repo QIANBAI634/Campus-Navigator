@@ -113,11 +113,13 @@ struct DiaryEntry {
     qint64                  id;             // 唯一标识（时间戳）
     QString                 content;        // 日记文本内容
     QString                 category;       // 分类
+    QString                 campusName;     // 当前景区/校园名称
     QVector<PhotoAttachment> photos;        // 配图列表
     QVector<QJsonObject>     trackPoints;   // 轨迹点（JSON数组）
     QString                 createdAt;      // 创建时间
     QString                 publishedAt;    // 发布时间（草稿为空）
     QString                 userId;         // 用户ID
+    QString                 userNickname;   // 用户昵称
 
     DiaryEntry() : id(0) {
         createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
@@ -131,13 +133,15 @@ struct DiaryEntry {
 
     QJsonObject toJson() const {
         QJsonObject obj;
-        obj["id"]        = id;
-        obj["content"]   = content;
-        obj["category"]  = category;
-        obj["createdAt"] = createdAt;
+        obj["id"]         = id;
+        obj["content"]    = content;
+        obj["category"]   = category;
+        obj["campusName"] = campusName;
+        obj["createdAt"]  = createdAt;
         obj["publishedAt"] = publishedAt;
-        obj["userId"]    = userId;
-        obj["preview"]   = preview();
+        obj["userId"]     = userId;
+        obj["userNickname"] = userNickname;
+        obj["preview"]    = preview();
 
         QJsonArray photoArr;
         for (const auto& p : photos) {
@@ -157,12 +161,14 @@ struct DiaryEntry {
 
     static DiaryEntry fromJson(const QJsonObject& obj) {
         DiaryEntry entry;
-        entry.id          = static_cast<qint64>(obj["id"].toDouble());
-        entry.content     = obj["content"].toString();
-        entry.category    = obj["category"].toString();
-        entry.createdAt   = obj["createdAt"].toString();
-        entry.publishedAt = obj["publishedAt"].toString();
-        entry.userId      = obj["userId"].toString();
+        entry.id           = static_cast<qint64>(obj["id"].toDouble());
+        entry.content      = obj["content"].toString();
+        entry.category     = obj["category"].toString();
+        entry.campusName   = obj["campusName"].toString();
+        entry.createdAt    = obj["createdAt"].toString();
+        entry.publishedAt  = obj["publishedAt"].toString();
+        entry.userId       = obj["userId"].toString();
+        entry.userNickname = obj["userNickname"].toString();
 
         QJsonArray photoArr = obj["photos"].toArray();
         for (const auto& p : photoArr) {
@@ -196,12 +202,13 @@ public:
     bool removeDraft(int index);
     int  draftCount() const;
 
-    // ========== 已发布日记管理 ==========
-    QVector<DiaryEntry> loadPublished() const;
-    bool savePublished(const QVector<DiaryEntry>& published) const;
-    bool publishDraft(int draftIndex);
-    bool removePublished(int index);
-    int  publishedCount() const;
+    // ========== 已发布日记管理（全局共享） ==========
+    static QVector<DiaryEntry> loadPublished(const QString& dataDir);
+    static bool savePublished(const QString& dataDir, const QVector<DiaryEntry>& published);
+    bool publishDraft(int draftIndex, const QString& dataDir,
+                      const QString& campusName, const QString& nickname);
+    static bool removePublished(const QString& dataDir, int index);
+    static int  publishedCount(const QString& dataDir);
 
     // ========== 图片管理 ==========
     QString copyPhotoToStorage(const QString& sourcePath);

@@ -998,7 +998,15 @@ void MainWindow::onPublishDraft(int index)
 
     if (reply != QMessageBox::Yes) return;
 
-    if (m_diaryManager.publishDraft(index)) {
+    // 获取当前景区名和用户昵称
+    QString campusName;
+    int ci = m_campusSelect->currentData().toInt();
+    const auto& camps = getAllCampuses();
+    if (ci >= 0 && ci < camps.size()) campusName = camps[ci].name;
+    QString nickname = m_userManager.currentUser().nickname;
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+
+    if (m_diaryManager.publishDraft(index, globalDir, campusName, nickname)) {
         refreshDraftList();
         refreshPublishedList();
         m_diarySummary->setText("📤 日记已发布！");
@@ -1033,7 +1041,8 @@ void MainWindow::onDeletePublished(int index)
 
     if (reply != QMessageBox::Yes) return;
 
-    if (m_diaryManager.removePublished(index)) {
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    if (DiaryManager::removePublished(globalDir, index)) {
         refreshPublishedList();
         m_diarySummary->setText("🗑️ 已发布日记已删除");
         m_diarySummary->show();
@@ -1042,7 +1051,8 @@ void MainWindow::onDeletePublished(int index)
 
 void MainWindow::onViewTimeline(int activeIndex)
 {
-    QVector<DiaryEntry> published = m_diaryManager.loadPublished();
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
     if (published.isEmpty()) {
         QMessageBox::information(this, "已发布日记", "暂无已发布的日记。");
         return;
@@ -1105,7 +1115,9 @@ void MainWindow::onViewTimeline(int activeIndex)
         QString destInfo;
         if (!item.trackPoints.isEmpty()) {
             QJsonObject last = item.trackPoints.last();
-            destInfo = QString(" · 🏁 %1").arg(last["name"].toString());
+            QString addr = item.campusName.isEmpty() ? last["name"].toString()
+                : item.campusName + ", " + last["name"].toString();
+            destInfo = QString(" · 🏁 %1").arg(addr);
         }
         QLabel* timeLabel = new QLabel(
             QString("🕐 %1%2").arg(timeStr, destInfo));
@@ -1272,7 +1284,8 @@ void MainWindow::refreshPublishedList()
         delete item;
     }
 
-    QVector<DiaryEntry> published = m_diaryManager.loadPublished();
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
     m_publishedCountBadge->setText(QString::number(published.size()));
 
     if (published.isEmpty()) {
@@ -1282,7 +1295,9 @@ void MainWindow::refreshPublishedList()
 
     m_publishedPanel->show();
 
-    for (int i = 0; i < published.size(); ++i) {
+    // 只显示最新一条（任何人都能看到）
+    int showCount = qMin(1, published.size());
+    for (int i = 0; i < showCount; ++i) {
         const DiaryEntry& entry = published[i];
 
         QWidget* row = new QWidget();
@@ -1307,10 +1322,14 @@ void MainWindow::refreshPublishedList()
         QString destInfo;
         if (!entry.trackPoints.isEmpty()) {
             QJsonObject last = entry.trackPoints.last();
-            destInfo = QString(" · 🏁 %1").arg(last["name"].toString());
+            QString addr = entry.campusName.isEmpty() ? last["name"].toString()
+                : entry.campusName + ", " + last["name"].toString();
+            destInfo = QString(" · 🏁 %1").arg(addr);
         }
 
-        QString meta = QString("🏷️ %1 · 🕐 %2 · 📝 %3 字 · 🖼️ %4 张图%5")
+        QString authorStr = entry.userNickname.isEmpty() ? entry.userId : entry.userNickname;
+        QString meta = QString("👤 %1 · 🏷️ %2 · 🕐 %3 · 📝 %4 字 · 🖼️ %5 张图%6")
+                           .arg(authorStr)
                            .arg(entry.category)
                            .arg(timeStr)
                            .arg(entry.content.length())
