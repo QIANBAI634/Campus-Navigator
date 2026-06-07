@@ -21,6 +21,8 @@
 #include <QTimer>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QButtonGroup>
+#include <QEvent>
 
 #include "graph.h"
 #include "diarymanager.h"
@@ -33,6 +35,10 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+protected:
+    // 事件过滤器：处理朋友圈图片点击放大
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
     // ========== 导航相关 ==========
@@ -103,6 +109,10 @@ private:
 
     // 滚动区域内的主容器
     QWidget*       m_scrollContent;
+    QScrollArea*   m_scrollArea;
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // MAINWINDOW_H

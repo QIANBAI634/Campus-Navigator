@@ -10,6 +10,8 @@
 #include <QFileInfo>
 #include <QPixmap>
 #include <QFrame>
+#include <QButtonGroup>
+#include <QMouseEvent>
 
 // ============================================================
 // 构造函数 & 析构函数
@@ -20,13 +22,13 @@ MainWindow::MainWindow(QWidget *parent)
 {
     // 设置窗口属性
     setWindowTitle("北邮沙河 · 智行导航  |  校园导航系统");
-    resize(720, 900);
+    resize(720, 860);
 
-    // 居中显示
+    // 居中显示（确保不超出屏幕顶部）
     if (auto* screen = QGuiApplication::primaryScreen()) {
-        QRect screenGeometry = screen->availableGeometry();
-        int x = (screenGeometry.width() - width()) / 2;
-        int y = (screenGeometry.height() - height()) / 2;
+        QRect sg = screen->availableGeometry();
+        int x = qMax(sg.x(), sg.x() + (sg.width()  - width())  / 2);
+        int y = qMax(sg.y(), sg.y() + (sg.height() - height()) / 2);
         move(x, y);
     }
 
@@ -47,6 +49,62 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    // 宽屏幕时在视口加左右内边距，让内容视觉居中
+    if (m_scrollArea && m_scrollArea->viewport()) {
+        int margin = (width() > 720) ? (width() - 720) / 2 : 0;
+        m_scrollArea->viewport()->setStyleSheet(
+            QString("padding-left: %1px; padding-right: %1px;").arg(margin));
+    }
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    // 朋友圈时间线中点击图片 → 打开大图预览
+    if (event->type() == QEvent::MouseButtonPress) {
+        QLabel *label = qobject_cast<QLabel*>(obj);
+        if (label && label->property("photoPath").isValid()) {
+            QString photoPath = label->property("photoPath").toString();
+            QPixmap pm(photoPath);
+            if (!pm.isNull()) {
+                QDialog *viewer = new QDialog(this);
+                viewer->setWindowTitle("🖼️ 图片预览");
+                viewer->setStyleSheet("QDialog { background: black; }");
+                viewer->resize(800, 600);
+
+                QVBoxLayout *vl = new QVBoxLayout(viewer);
+                vl->setContentsMargins(0, 0, 0, 0);
+
+                QLabel *imgLabel = new QLabel();
+                imgLabel->setPixmap(pm.scaled(780, 580,
+                    Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                imgLabel->setAlignment(Qt::AlignCenter);
+                imgLabel->setStyleSheet("background: black;");
+
+                // 点击任意位置关闭
+                imgLabel->setCursor(Qt::PointingHandCursor);
+                imgLabel->installEventFilter(viewer);
+                imgLabel->setProperty("closeOnClick", true);
+
+                vl->addWidget(imgLabel);
+                viewer->exec();
+                viewer->deleteLater();
+            }
+            return true;
+        }
+        // 大图预览中点击关闭
+        if (label && label->property("closeOnClick").isValid()) {
+            if (QDialog *dlg = qobject_cast<QDialog*>(label->parent())) {
+                dlg->accept();
+            }
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
 
 // ============================================================
 // 全局样式表
@@ -122,11 +180,11 @@ void MainWindow::applyGlobalStylesheet()
 void MainWindow::setupUI()
 {
     // 使用 QScrollArea 作为中央控件
-    QScrollArea* scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-    setCentralWidget(scrollArea);
+    m_scrollArea = new QScrollArea(this);
+    m_scrollArea->setWidgetResizable(true);
+    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scrollArea->setFrameShape(QFrame::NoFrame);
+    setCentralWidget(m_scrollArea);
 
     // 滚动内容容器（模拟 HTML 中的卡片）
     m_scrollContent = new QWidget();
@@ -167,9 +225,9 @@ void MainWindow::setupUI()
         "font-size:11px; color:#5e7a8c; padding:8px 0 24px 0;");
     mainLayout->addWidget(footer);
 
-    scrollArea->setWidget(m_scrollContent);
+    m_scrollArea->setWidget(m_scrollContent);
 
-    // 限制最大宽度，让界面在大屏幕上居中美观
+    // 限制最大宽度（后续 resizeEvent 会动态居中）
     m_scrollContent->setMaximumWidth(680);
 }
 
@@ -388,18 +446,19 @@ QWidget* MainWindow::createDiaryPanel()
 
     // 分类按钮行
     QHBoxLayout* catLayout = new QHBoxLayout();
-    catLayout->setSpacing(8);
+    catLayout->setSpacing(6);
     QStringList cats = DiaryCategory::allCategories();
     for (const QString& cat : cats) {
         QPushButton* btn = new QPushButton(cat);
         btn->setCheckable(true);
+        btn->setMinimumWidth(64);  // 确保四字标签完整显示
         btn->setStyleSheet(
             "QPushButton {"
             "  background: white;"
             "  border: 1px solid #cbdde6;"
             "  border-radius: 20px;"
-            "  padding: 6px 14px;"
-            "  font-size: 12px;"
+            "  padding: 8px 16px;"
+            "  font-size: 13px;"
             "  font-weight: 500;"
             "  color: #1e4a6b;"
             "}"
@@ -744,17 +803,17 @@ void MainWindow::onFinishNavigation()
 
 void MainWindow::onCategoryChanged()
 {
-    // 找到被点击的分类按钮
+    // clicked 信号在 checkable 按钮状态变更后触发
+    // 强制确保点击的按钮被选中，其余取消
+    QPushButton* sender = qobject_cast<QPushButton*>(QObject::sender());
+    if (!sender) return;
+
     for (QPushButton* btn : m_categoryBtns) {
-        if (btn->isChecked()) {
-            m_currentDiary.category = btn->text();
-            // 取消其他按钮的选中状态
-            for (QPushButton* other : m_categoryBtns) {
-                if (other != btn) other->setChecked(false);
-            }
-            break;
-        }
+        btn->blockSignals(true);
+        btn->setChecked(btn == sender);
+        btn->blockSignals(false);
     }
+    m_currentDiary.category = sender->text();
     updateWordCount();
 }
 
@@ -985,13 +1044,15 @@ void MainWindow::onViewTimeline(int activeIndex)
             "white-space:pre-wrap; padding:8px 0;");
         cardLayout->addWidget(content);
 
-        // 配图预览
+        // 配图预览（可点击放大）
         if (!item.photos.isEmpty()) {
             QHBoxLayout* photoLayout = new QHBoxLayout();
             for (const auto& p : item.photos) {
                 if (p.attachOrder > 3) break; // 最多显示3张
                 QLabel* photoLabel = new QLabel();
+                photoLabel->setCursor(Qt::PointingHandCursor);
                 QPixmap pm(p.imageFilePath);
+                QString photoPath = p.imageFilePath;  // 捕获路径
                 if (!pm.isNull()) {
                     photoLabel->setPixmap(pm.scaled(120, 120,
                         Qt::KeepAspectRatio, Qt::SmoothTransformation));
@@ -1000,7 +1061,11 @@ void MainWindow::onViewTimeline(int activeIndex)
                 }
                 photoLabel->setStyleSheet(
                     "border:2px solid #e2edf2; border-radius:12px; padding:4px;");
-                photoLabel->setToolTip(p.caption);
+                photoLabel->setToolTip(QString("点击放大 · %1").arg(p.caption));
+
+                // 点击图片打开大图预览
+                photoLabel->installEventFilter(this);
+                photoLabel->setProperty("photoPath", photoPath);
                 photoLayout->addWidget(photoLabel);
             }
             photoLayout->addStretch();
