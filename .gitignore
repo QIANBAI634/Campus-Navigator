@@ -1,0 +1,12 @@
+# 编译产物
+build/
+
+# Qt 自动生成
+*.pro.user
+moc_*
+ui_*
+qrc_*
+
+# 系统文件
+.DS_Store
+Thumbs.db
