@@ -162,6 +162,70 @@ inline void CampusGraph::buildGraph()
         m_adj[toIdx].push_back({fromIdx, w});
         ++m_edgeCount;
     }
+
+    // ============================================================
+    // 自动拆分长边，扩充至 200 条以上（满足课程设计要求）
+    // 策略：每次找最长边，在中点插入虚拟路口节点，一条变两条
+    // ============================================================
+    const int TARGET_EDGES = 200;
+    int splitNodeId = 35;  // 继续路口编号（34个已有路口之后）
+
+    while (m_edgeCount < TARGET_EDGES) {
+        // 找最长边
+        double maxW = 0.0;
+        int maxU = -1, maxV = -1;
+        for (int u = 0; u < m_adj.size(); ++u) {
+            for (int j = 0; j < m_adj[u].size(); ++j) {
+                if (m_adj[u][j].to > u && m_adj[u][j].weight > maxW) {
+                    maxW = m_adj[u][j].weight;
+                    maxU = u;
+                    maxV = m_adj[u][j].to;
+                }
+            }
+        }
+        if (maxU < 0 || maxW < 2.0) break;  // 无更多边可拆，或边太短
+
+        // 创建中点路口节点
+        NodeInfo midNode;
+        midNode.name  = QString::number(splitNodeId++);
+        midNode.type  = "intersection";
+        midNode.lng   = (m_nodeList[maxU].lng + m_nodeList[maxV].lng) / 2.0;
+        midNode.lat   = (m_nodeList[maxU].lat + m_nodeList[maxV].lat) / 2.0;
+        midNode.pixelX = (m_nodeList[maxU].pixelX + m_nodeList[maxV].pixelX) / 2.0;
+        midNode.pixelY = (m_nodeList[maxU].pixelY + m_nodeList[maxV].pixelY) / 2.0;
+
+        int midIdx = m_nodeList.size();
+        m_nodeList.append(midNode);
+        m_nodeIndexMap[midNode.name] = midIdx;
+        ++m_nodeCount;
+
+        // 删除旧边 maxU-maxV（两边都要删）
+        auto removeEdge = [](QVector<Edge>& vec, int target) {
+            for (int k = 0; k < vec.size(); ++k) {
+                if (vec[k].to == target) { vec.removeAt(k); return; }
+            }
+        };
+        removeEdge(m_adj[maxU], maxV);
+        removeEdge(m_adj[maxV], maxU);
+
+        // 计算两段新边的权重
+        double w1 = haversineDistance(m_nodeList[maxU].lng, m_nodeList[maxU].lat,
+                                       m_nodeList[midIdx].lng, m_nodeList[midIdx].lat);
+        double w2 = haversineDistance(m_nodeList[midIdx].lng, m_nodeList[midIdx].lat,
+                                       m_nodeList[maxV].lng, m_nodeList[maxV].lat);
+
+        // 为新节点创建邻接列表
+        m_adj.append(QVector<Edge>());
+
+        // 添加两段新边
+        m_adj[maxU].push_back({midIdx, w1});
+        m_adj[midIdx].push_back({maxU, w1});
+        m_adj[midIdx].push_back({maxV, w2});
+        m_adj[maxV].push_back({midIdx, w2});
+
+        // 边数：删1加2，净+1
+        ++m_edgeCount;
+    }
 }
 
 inline double CampusGraph::haversineDistance(double lng1, double lat1,
