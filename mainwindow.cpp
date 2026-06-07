@@ -50,17 +50,6 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow() {}
 
-void MainWindow::resizeEvent(QResizeEvent *event)
-{
-    QMainWindow::resizeEvent(event);
-    // 宽屏幕时在视口加左右内边距，让内容视觉居中
-    if (m_scrollArea && m_scrollArea->viewport()) {
-        int margin = (width() > 720) ? (width() - 720) / 2 : 0;
-        m_scrollArea->viewport()->setStyleSheet(
-            QString("padding-left: %1px; padding-right: %1px;").arg(margin));
-    }
-}
-
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     // 朋友圈时间线中点击图片 → 打开大图预览
@@ -179,21 +168,14 @@ void MainWindow::applyGlobalStylesheet()
 
 void MainWindow::setupUI()
 {
-    // 使用 QScrollArea 作为中央控件
-    m_scrollArea = new QScrollArea(this);
-    m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setFrameShape(QFrame::NoFrame);
-    setCentralWidget(m_scrollArea);
-
-    // 滚动内容容器（模拟 HTML 中的卡片）
+    // 滚动内容容器（模拟 HTML 中的白色卡片）
     m_scrollContent = new QWidget();
     m_scrollContent->setObjectName("scrollContent");
+    m_scrollContent->setFixedWidth(690);
     m_scrollContent->setStyleSheet(
         "#scrollContent {"
         "  background: rgba(255,255,255,0.96);"
         "  border-radius: 40px;"
-        "  margin: 16px;"
         "}"
     );
 
@@ -225,10 +207,26 @@ void MainWindow::setupUI()
         "font-size:11px; color:#5e7a8c; padding:8px 0 24px 0;");
     mainLayout->addWidget(footer);
 
+    // 滚动区域包裹内容
+    m_scrollArea = new QScrollArea();
+    m_scrollArea->setWidgetResizable(true);
+    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scrollArea->setFrameShape(QFrame::NoFrame);
     m_scrollArea->setWidget(m_scrollContent);
+    m_scrollArea->setFixedWidth(720);  // 690 + 预留滚动条宽度
 
-    // 限制最大宽度（后续 resizeEvent 会动态居中）
-    m_scrollContent->setMaximumWidth(680);
+    // 外层居中容器：横向居中，纵向铺满
+    QWidget* centerContainer = new QWidget(this);
+    centerContainer->setStyleSheet("background: transparent;");
+    QVBoxLayout* outerVLayout = new QVBoxLayout(centerContainer);
+    outerVLayout->setContentsMargins(0, 0, 0, 0);
+    QHBoxLayout* centerHLayout = new QHBoxLayout();
+    centerHLayout->addStretch();
+    centerHLayout->addWidget(m_scrollArea);
+    centerHLayout->addStretch();
+    outerVLayout->addLayout(centerHLayout);
+    setCentralWidget(centerContainer);
 }
 
 // ============================================================
@@ -446,19 +444,20 @@ QWidget* MainWindow::createDiaryPanel()
 
     // 分类按钮行
     QHBoxLayout* catLayout = new QHBoxLayout();
-    catLayout->setSpacing(6);
+    catLayout->setSpacing(8);
     QStringList cats = DiaryCategory::allCategories();
     for (const QString& cat : cats) {
         QPushButton* btn = new QPushButton(cat);
         btn->setCheckable(true);
-        btn->setMinimumWidth(64);  // 确保四字标签完整显示
+        btn->setMinimumWidth(80);
+        btn->setFixedHeight(36);
         btn->setStyleSheet(
             "QPushButton {"
             "  background: white;"
             "  border: 1px solid #cbdde6;"
-            "  border-radius: 20px;"
-            "  padding: 8px 16px;"
-            "  font-size: 13px;"
+            "  border-radius: 18px;"
+            "  padding: 6px 18px;"
+            "  font-size: 14px;"
             "  font-weight: 500;"
             "  color: #1e4a6b;"
             "}"

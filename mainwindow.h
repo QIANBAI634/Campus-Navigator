@@ -110,9 +110,6 @@ private:
     // 滚动区域内的主容器
     QWidget*       m_scrollContent;
     QScrollArea*   m_scrollArea;
-
-protected:
-    void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // MAINWINDOW_H
