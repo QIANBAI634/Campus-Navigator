@@ -11,6 +11,7 @@
 #include <QPixmap>
 #include <QFrame>
 #include <QButtonGroup>
+#include <QGridLayout>
 #include <QMouseEvent>
 
 // ============================================================
@@ -442,22 +443,22 @@ QWidget* MainWindow::createDiaryPanel()
     title->setStyleSheet("font-size:16px; font-weight:700; color:#0f5b7a;");
     layout->addWidget(title);
 
-    // 分类按钮行
-    QHBoxLayout* catLayout = new QHBoxLayout();
-    catLayout->setSpacing(8);
+    // 分类按钮 — 2行3列网格布局，确保每个按钮足够宽
+    QGridLayout* catLayout = new QGridLayout();
+    catLayout->setSpacing(10);
     QStringList cats = DiaryCategory::allCategories();
-    for (const QString& cat : cats) {
-        QPushButton* btn = new QPushButton(cat);
+    for (int i = 0; i < cats.size(); ++i) {
+        QPushButton* btn = new QPushButton(cats[i]);
         btn->setCheckable(true);
-        btn->setMinimumWidth(80);
-        btn->setFixedHeight(36);
+        btn->setMinimumHeight(40);
+        btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         btn->setStyleSheet(
             "QPushButton {"
             "  background: white;"
             "  border: 1px solid #cbdde6;"
-            "  border-radius: 18px;"
-            "  padding: 6px 18px;"
-            "  font-size: 14px;"
+            "  border-radius: 12px;"
+            "  padding: 10px 0px;"
+            "  font-size: 16px;"
             "  font-weight: 500;"
             "  color: #1e4a6b;"
             "}"
@@ -470,13 +471,12 @@ QWidget* MainWindow::createDiaryPanel()
         );
         connect(btn, &QPushButton::clicked, this, &MainWindow::onCategoryChanged);
         m_categoryBtns.append(btn);
-        catLayout->addWidget(btn);
+        catLayout->addWidget(btn, i / 3, i % 3);
     }
     // 默认选中第一个（游记）
     if (!m_categoryBtns.isEmpty()) {
         m_categoryBtns[0]->setChecked(true);
     }
-    catLayout->addStretch();
     layout->addLayout(catLayout);
 
     // 日记文本区域
