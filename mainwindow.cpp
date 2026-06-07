@@ -271,10 +271,13 @@ QWidget* MainWindow::createHeaderPanel()
     m_campusSelect = new QComboBox();
     m_campusSelect->setMinimumWidth(180);
     m_campusSelect->setStyleSheet(
-        "QComboBox { background: rgba(255,255,255,0.9); border-radius: 12px;"
-        "padding: 6px 12px; font-size: 12px; color: #0a2b3e; }"
-        "QComboBox:hover { background: white; }"
-        "QComboBox QAbstractItemView { max-height: 300px; }");
+        "QComboBox { background: white; border-radius: 12px;"
+        "padding: 6px 12px; font-size: 12px; color: #1f2f38; }"
+        "QComboBox:hover { background: #f0f4f9; }"
+        "QComboBox QAbstractItemView {"
+        "  background: white; color: #1f2f38;"
+        "  selection-background-color: #e9f2f5; selection-color: #0a2b3e;"
+        "  max-height: 300px; }");
     // 填充200个景区
     const auto& campuses = getAllCampuses();
     for (int i = 0; i < campuses.size(); ++i) {
@@ -296,9 +299,12 @@ QWidget* MainWindow::createHeaderPanel()
     m_userSelect = new QComboBox();
     m_userSelect->setMaximumWidth(130);
     m_userSelect->setStyleSheet(
-        "QComboBox { background: rgba(255,255,255,0.9); border-radius: 12px;"
-        "padding: 6px 10px; font-size: 12px; color: #0a2b3e; }"
-        "QComboBox:hover { background: white; }");
+        "QComboBox { background: white; border-radius: 12px;"
+        "padding: 6px 10px; font-size: 12px; color: #1f2f38; }"
+        "QComboBox:hover { background: #f0f4f9; }"
+        "QComboBox QAbstractItemView {"
+        "  background: white; color: #1f2f38;"
+        "  selection-background-color: #e9f2f5; selection-color: #0a2b3e; }");
     for (const auto& u : m_userManager.allUsers()) {
         m_userSelect->addItem(u.avatar + " " + u.nickname, u.userId);
     }
@@ -432,6 +438,32 @@ QWidget* MainWindow::createNavigationPanel()
     }
     m_mapWidget->placeLandmarkDots();
     layout->addWidget(m_mapWidget);
+
+    // ---- 设施图例 ----
+    QWidget* legendBox = new QWidget();
+    legendBox->setStyleSheet("background: #f8fafc; border-radius: 12px; padding: 4px;");
+    QHBoxLayout* legendLayout = new QHBoxLayout(legendBox);
+    legendLayout->setContentsMargins(8, 4, 8, 4);
+    legendLayout->setSpacing(6);
+    QVector<QPair<QString, QColor>> legendItems = {
+        {"🏠出", QColor(50,180,50)},   {"🍽️餐", QColor(240,150,30)},
+        {"🛒购", QColor(255,140,0)},   {"🛏️宿", QColor(100,100,220)},
+        {"📖教", QColor(30,130,210)},  {"🏛️政", QColor(140,100,80)},
+        {"⚽运", QColor(50,200,200)},  {"🏥医", QColor(220,50,50)},
+        {"📚学", QColor(160,100,200)}, {"☕休", QColor(250,180,220)},
+        {"🚻卫", QColor(100,180,220)}, {"💰金", QColor(220,200,30)},
+        {"📮邮", QColor(180,140,80)},
+    };
+    for (auto& item : legendItems) {
+        QLabel* dot = new QLabel("●");
+        dot->setStyleSheet(QString("color: %1; font-size: 14px;").arg(item.second.name()));
+        legendLayout->addWidget(dot);
+        QLabel* lbl = new QLabel(item.first);
+        lbl->setStyleSheet("font-size: 9px; color: #5e7a8c;");
+        legendLayout->addWidget(lbl);
+    }
+    legendLayout->addStretch();
+    layout->addWidget(legendBox);
 
     // ---- 结果显示区域 ----
     QWidget* resultBox = new QWidget();
@@ -1107,6 +1139,10 @@ void MainWindow::onViewTimeline(int activeIndex)
 
         // 头部
         QHBoxLayout* cardHeader = new QHBoxLayout();
+        QString authorStr = item.userNickname.isEmpty() ? item.userId : item.userNickname;
+        QLabel* authorLabel = new QLabel(QString("👤 %1").arg(authorStr));
+        authorLabel->setStyleSheet("font-size:11px; color:#1f6d49; font-weight:700;");
+        cardHeader->addWidget(authorLabel);
         QLabel* catLabel = new QLabel(QString("🏷️ %1").arg(item.category));
         catLabel->setStyleSheet("font-size:11px; color:#7f9aaa; font-weight:600;");
         cardHeader->addWidget(catLabel);

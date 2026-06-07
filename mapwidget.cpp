@@ -66,7 +66,25 @@ void MapWidget::placeLandmarkDots()
     }
     m_dotItems.clear();
 
-    // 为每个地标放置红点
+    // 为每个地标放置彩色圆点（按设施类型区分）
+    // 设施类型 → 颜色映射
+    static const QMap<QString, QColor> facilityColors = {
+        {"出入口", QColor(50,  180, 50  )},  // 绿色
+        {"餐饮",   QColor(240, 150, 30  )},  // 橙色
+        {"购物",   QColor(255, 140, 0   )},  // 深橙
+        {"住宿",   QColor(100, 100, 220 )},  // 蓝紫
+        {"教学",   QColor(30,  130, 210 )},  // 蓝色
+        {"行政",   QColor(140, 100, 80  )},  // 棕色
+        {"运动",   QColor(50,  200, 200 )},  // 青色
+        {"医疗",   QColor(220, 50,  50  )},  // 红色
+        {"学习",   QColor(160, 100, 200 )},  // 紫色
+        {"休闲",   QColor(250, 180, 220 )},  // 粉色
+        {"卫生",   QColor(100, 180, 220 )},  // 浅蓝
+        {"金融",   QColor(220, 200, 30  )},  // 金色
+        {"邮政",   QColor(180, 140, 80  )},  // 土黄
+    };
+    static const QColor defaultColor(200, 200, 200);
+
     const auto &nodes = m_graph->nodes();
     for (int i = 0; i < nodes.size(); ++i) {
         if (nodes[i].type != "landmark") continue;
@@ -74,16 +92,16 @@ void MapWidget::placeLandmarkDots()
         double px = nodes[i].pixelX;
         double py = nodes[i].pixelY;
 
-        // 红点
+        QColor color = facilityColors.value(nodes[i].facilityType, defaultColor);
+
         auto *dot = m_scene->addEllipse(
             px - DOT_RADIUS, py - DOT_RADIUS,
             DOT_RADIUS * 2, DOT_RADIUS * 2,
-            QPen(Qt::darkRed, 1.5),
-            QBrush(QColor(220, 40, 40))
+            QPen(color.darker(140), 1.5),
+            QBrush(color)
         );
-        dot->setZValue(2);  // 在地图上方
-        // 存储节点索引用于 tooltip
-        dot->setToolTip(nodes[i].name);
+        dot->setZValue(2);
+        dot->setToolTip(nodes[i].name + " · " + nodes[i].facilityType);
         m_dotItems.append(dot);
     }
 }

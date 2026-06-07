@@ -1,0 +1,62 @@
+[
+    {
+        "avatar": "🧑‍💻",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "旅行达人小明",
+        "userId": "user_01"
+    },
+    {
+        "avatar": "👩‍🎨",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "背包客小红",
+        "userId": "user_02"
+    },
+    {
+        "avatar": "📷",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "摄影爱好者阿强",
+        "userId": "user_03"
+    },
+    {
+        "avatar": "🍜",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "美食猎人小丽",
+        "userId": "user_04"
+    },
+    {
+        "avatar": "🚴",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "骑行侠阿飞",
+        "userId": "user_05"
+    },
+    {
+        "avatar": "🎨",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "文艺青年小雅",
+        "userId": "user_06"
+    },
+    {
+        "avatar": "🏔️",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "户外探险家老张",
+        "userId": "user_07"
+    },
+    {
+        "avatar": "📚",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "历史迷老王",
+        "userId": "user_08"
+    },
+    {
+        "avatar": "👨‍👩‍👧",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "亲子游小刘",
+        "userId": "user_09"
+    },
+    {
+        "avatar": "🎒",
+        "createdAt": "2026-06-07T21:13:24",
+        "nickname": "穷游达人阿杰",
+        "userId": "user_10"
+    }
+]
