@@ -12,12 +12,15 @@
 
 // 节点信息结构体
 struct NodeInfo {
-    QString name;   // 节点名称
-    double lng;     // 经度
-    double lat;     // 纬度
-    QString type;   // 类型: "landmark" 或 "intersection"
-    double pixelX;  // 在地图图片上的像素 X 坐标（1600×1143）
-    double pixelY;  // 在地图图片上的像素 Y 坐标（1600×1143）
+    QString name;         // 节点名称
+    double lng;           // 经度
+    double lat;           // 纬度
+    QString type;         // 类型: "landmark" 或 "intersection"
+    double pixelX;        // 在地图图片上的像素 X 坐标（1600×1143）
+    double pixelY;        // 在地图图片上的像素 Y 坐标（1600×1143）
+    QString facilityType; // 服务设施类型（仅 landmark 有效）:
+                          // 出入口, 餐饮, 购物, 住宿, 教学, 行政,
+                          // 运动, 医疗, 学习, 休闲, 卫生, 金融, 邮政, 交通
 };
 
 // 边信息（原始数据，存储名称对）

@@ -25,6 +25,10 @@ add_executable(CampusNavigator
     diarymanager.h
     mapwidget.cpp
     mapwidget.h
+    campusdatabase.cpp
+    campusdatabase.h
+    usermanager.cpp
+    usermanager.h
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)
