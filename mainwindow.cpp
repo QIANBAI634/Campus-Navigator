@@ -160,6 +160,35 @@ void MainWindow::applyGlobalStylesheet()
         "  font-size: 13px;"
         "  color: rgba(255,255,255,0.8);"
         "}"
+        // Tooltip 白底黑字
+        "QToolTip {"
+        "  background: white;"
+        "  color: #1f2f38;"
+        "  border: 1px solid #cbdde6;"
+        "  border-radius: 6px;"
+        "  padding: 4px 8px;"
+        "  font-size: 12px;"
+        "}"
+        // 下拉框滚动条白底
+        "QScrollBar:vertical {"
+        "  background: #f0f4f9;"
+        "  width: 10px;"
+        "  border-radius: 5px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "  background: #cbdde6;"
+        "  border-radius: 5px;"
+        "  min-height: 20px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "  background: #a0b8c8;"
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "  height: 0px;"
+        "}"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+        "  background: none;"
+        "}"
     ));
 }
 
@@ -277,7 +306,11 @@ QWidget* MainWindow::createHeaderPanel()
         "QComboBox QAbstractItemView {"
         "  background: white; color: #1f2f38;"
         "  selection-background-color: #e9f2f5; selection-color: #0a2b3e;"
-        "  max-height: 300px; }");
+        "  max-height: 300px; }"
+        "QComboBox QAbstractItemView QScrollBar:vertical {"
+        "  background: #f0f4f9; width: 8px; border-radius: 4px; }"
+        "QComboBox QAbstractItemView QScrollBar::handle:vertical {"
+        "  background: #cbdde6; border-radius: 4px; min-height: 20px; }");
     // 填充200个景区
     const auto& campuses = getAllCampuses();
     for (int i = 0; i < campuses.size(); ++i) {
@@ -439,31 +472,71 @@ QWidget* MainWindow::createNavigationPanel()
     m_mapWidget->placeLandmarkDots();
     layout->addWidget(m_mapWidget);
 
-    // ---- 设施图例 ----
-    QWidget* legendBox = new QWidget();
-    legendBox->setStyleSheet("background: #f8fafc; border-radius: 12px; padding: 4px;");
-    QHBoxLayout* legendLayout = new QHBoxLayout(legendBox);
-    legendLayout->setContentsMargins(8, 4, 8, 4);
-    legendLayout->setSpacing(6);
-    QVector<QPair<QString, QColor>> legendItems = {
-        {"🏠出", QColor(50,180,50)},   {"🍽️餐", QColor(240,150,30)},
-        {"🛒购", QColor(255,140,0)},   {"🛏️宿", QColor(100,100,220)},
-        {"📖教", QColor(30,130,210)},  {"🏛️政", QColor(140,100,80)},
-        {"⚽运", QColor(50,200,200)},  {"🏥医", QColor(220,50,50)},
-        {"📚学", QColor(160,100,200)}, {"☕休", QColor(250,180,220)},
-        {"🚻卫", QColor(100,180,220)}, {"💰金", QColor(220,200,30)},
-        {"📮邮", QColor(180,140,80)},
-    };
-    for (auto& item : legendItems) {
-        QLabel* dot = new QLabel("●");
-        dot->setStyleSheet(QString("color: %1; font-size: 14px;").arg(item.second.name()));
-        legendLayout->addWidget(dot);
-        QLabel* lbl = new QLabel(item.first);
-        lbl->setStyleSheet("font-size: 9px; color: #5e7a8c;");
-        legendLayout->addWidget(lbl);
-    }
-    legendLayout->addStretch();
-    layout->addWidget(legendBox);
+    // ---- "显示标签类型" 按钮 (地图右下角浮层风格) ----
+    QWidget* legendBtnRow = new QWidget();
+    legendBtnRow->setStyleSheet("background: transparent;");
+    QHBoxLayout* legendBtnLayout = new QHBoxLayout(legendBtnRow);
+    legendBtnLayout->setContentsMargins(0, 4, 0, 4);
+    legendBtnLayout->addStretch();
+    QPushButton* legendBtn = new QPushButton("🏷️ 显示标签类型");
+    legendBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: white; border: 1px solid #cbdde6; border-radius: 16px;"
+        "  padding: 6px 14px; font-size: 12px; color: #1e4a6b; font-weight: 500; }"
+        "QPushButton:hover { background: #e9f2f5; border-color: #2c7da0; }");
+    legendBtn->setCursor(Qt::PointingHandCursor);
+    // 点击弹窗
+    connect(legendBtn, &QPushButton::clicked, this, [this]() {
+        QDialog* dlg = new QDialog(this);
+        dlg->setWindowTitle("🏷️ 服务设施标签类型");
+        dlg->resize(420, 360);
+        dlg->setStyleSheet("QDialog { background: #f8fafc; }");
+        QVBoxLayout* dl = new QVBoxLayout(dlg);
+        dl->setSpacing(10);
+        QLabel* dlTitle = new QLabel("地图上的彩色圆点对应以下设施类型：");
+        dlTitle->setStyleSheet("font-size:13px; color:#0f5b7a; font-weight:600; padding:4px 0;");
+        dl->addWidget(dlTitle);
+        QGridLayout* grid = new QGridLayout();
+        grid->setSpacing(8);
+        QVector<QPair<QString, QPair<QString, QColor>>> facilityList = {
+            {"出入口", {"🏠", QColor(50,180,50)}},   {"餐饮", {"🍽️", QColor(240,150,30)}},
+            {"购物", {"🛒", QColor(255,140,0)}},    {"住宿", {"🛏️", QColor(100,100,220)}},
+            {"教学", {"📖", QColor(30,130,210)}},   {"行政", {"🏛️", QColor(140,100,80)}},
+            {"运动", {"⚽", QColor(50,200,200)}},   {"医疗", {"🏥", QColor(220,50,50)}},
+            {"学习", {"📚", QColor(160,100,200)}},  {"休闲", {"☕", QColor(250,180,220)}},
+            {"卫生", {"🚻", QColor(100,180,220)}},  {"金融", {"💰", QColor(220,200,30)}},
+            {"邮政", {"📮", QColor(180,140,80)}},
+        };
+        for (int i = 0; i < facilityList.size(); ++i) {
+            QWidget* item = new QWidget();
+            item->setStyleSheet("background: white; border-radius: 10px; padding: 4px;");
+            QHBoxLayout* il = new QHBoxLayout(item);
+            il->setContentsMargins(8, 6, 8, 6);
+            // 颜色圆点
+            QLabel* dot = new QLabel("●");
+            dot->setStyleSheet(QString("color: %1; font-size: 20px;").arg(facilityList[i].second.second.name()));
+            il->addWidget(dot);
+            // emoji + 名称
+            QLabel* name = new QLabel(QString("%1 %2").arg(facilityList[i].second.first, facilityList[i].first));
+            name->setStyleSheet("font-size: 14px; color:#1f2f38; font-weight:500;");
+            il->addWidget(name);
+            il->addStretch();
+            int row = i / 3, col = i % 3;
+            grid->addWidget(item, row, col);
+        }
+        dl->addLayout(grid);
+        QPushButton* closeBtn = new QPushButton("关闭");
+        closeBtn->setStyleSheet(
+            "QPushButton { background: #1f6d49; color: white; border-radius: 16px;"
+            "padding: 8px 24px; font-size: 13px; }"
+            "QPushButton:hover { background: #0e5437; }");
+        connect(closeBtn, &QPushButton::clicked, dlg, &QDialog::accept);
+        dl->addWidget(closeBtn, 0, Qt::AlignCenter);
+        dlg->exec();
+        dlg->deleteLater();
+    });
+    legendBtnLayout->addWidget(legendBtn);
+    layout->addWidget(legendBtnRow);
 
     // ---- 结果显示区域 ----
     QWidget* resultBox = new QWidget();
