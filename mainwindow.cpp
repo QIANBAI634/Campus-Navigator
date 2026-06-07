@@ -160,15 +160,6 @@ void MainWindow::applyGlobalStylesheet()
         "  font-size: 13px;"
         "  color: rgba(255,255,255,0.8);"
         "}"
-        // Tooltip 白底黑字
-        "QToolTip {"
-        "  background: white;"
-        "  color: #1f2f38;"
-        "  border: 1px solid #cbdde6;"
-        "  border-radius: 6px;"
-        "  padding: 4px 8px;"
-        "  font-size: 12px;"
-        "}"
         // 下拉框滚动条白底
         "QScrollBar:vertical {"
         "  background: #f0f4f9;"

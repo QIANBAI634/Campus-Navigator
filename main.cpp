@@ -20,6 +20,18 @@ int main(int argc, char *argv[])
     globalFont.setPointSize(10);
     app.setFont(globalFont);
 
+    // 全局 Tooltip 样式（必须在 QApplication 上设置才生效）
+    app.setStyleSheet(
+        "QToolTip {"
+        "  background: white;"
+        "  color: #1f2f38;"
+        "  border: 1px solid #cbdde6;"
+        "  border-radius: 6px;"
+        "  padding: 6px 10px;"
+        "  font-size: 12px;"
+        "}"
+    );
+
     MainWindow w;
     w.show();
 

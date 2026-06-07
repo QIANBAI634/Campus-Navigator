@@ -15,6 +15,7 @@
 #include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
 #include <QVector>
+#include <QLabel>
 #include "graph.h"
 
 class MapWidget : public QGraphicsView
@@ -45,6 +46,7 @@ public:
 protected:
     // 窗口大小改变时自动缩放地图以适配
     void resizeEvent(QResizeEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
 
 private:
     QGraphicsScene            *m_scene;
@@ -63,6 +65,12 @@ private:
 
     bool  m_pathActive;
     QPixmap m_basePixmap;  // 原始地图图片
+
+    // 自定义悬浮提示标签（白底黑字）
+    QLabel* m_tooltipLabel;
+
+    // 映射 QGraphicsEllipseItem* → 节点索引
+    QMap<QGraphicsEllipseItem*, int> m_dotIndexMap;
 
     // 坐标系转换常量（地图图片尺寸 1600×1143）
     static constexpr double MAP_WIDTH  = 1600.0;
