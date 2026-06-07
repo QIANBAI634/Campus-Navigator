@@ -27,6 +27,8 @@
 #include "graph.h"
 #include "diarymanager.h"
 #include "mapwidget.h"
+#include "campusdatabase.h"
+#include "usermanager.h"
 
 class MainWindow : public QMainWindow
 {
@@ -44,6 +46,8 @@ private slots:
     // ========== 导航相关 ==========
     void onPlanRoute();             // 规划路线按钮
     void onFinishNavigation();      // 完成导航按钮
+    void onCampusChanged(int index); // 切换景区/校园
+    void onUserChanged(int index);   // 切换用户
 
     // ========== 日记相关 ==========
     void onCategoryChanged();       // 分类按钮切换
@@ -78,9 +82,14 @@ private:
     CampusGraph    m_graph;         // 校园图
     DiaryManager   m_diaryManager;  // 日记管理器
     DiaryEntry     m_currentDiary;  // 当前正在编辑的日记
+    UserManager    m_userManager;   // 多用户管理器
+
+    // ========== 顶栏 UI 元素 ==========
+    QComboBox*     m_campusSelect;  // 景区/校园选择器
+    QComboBox*     m_userSelect;    // 用户切换
+    QLabel*        m_statsLabel;
 
     // ========== 导航 UI 元素 ==========
-    QLabel*        m_statsLabel;
     QComboBox*     m_startSelect;
     QComboBox*     m_endSelect;
     QPushButton*   m_planBtn;

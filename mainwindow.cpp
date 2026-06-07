@@ -241,33 +241,84 @@ QWidget* MainWindow::createHeaderPanel()
         "background: #0a2b3e;"
         "border-top-left-radius: 40px;"
         "border-top-right-radius: 40px;"
-        "padding: 24px;"
+        "padding: 20px 24px;"
     );
 
     QVBoxLayout* layout = new QVBoxLayout(header);
     layout->setAlignment(Qt::AlignCenter);
+    layout->setSpacing(8);
 
-    QLabel* title = new QLabel("📌 北邮沙河 · 智行导航");
+    QLabel* title = new QLabel("📍 校园导航系统");
     title->setObjectName("heroTitle");
     title->setAlignment(Qt::AlignCenter);
     layout->addWidget(title);
 
-    QLabel* subtitle = new QLabel("基于 Dijkstra 的最短路径规划 | 只显示主要地标");
+    QLabel* subtitle = new QLabel("基于 Dijkstra 的最短路径规划 | 200+ 景区/校园");
     subtitle->setObjectName("heroSubtitle");
     subtitle->setAlignment(Qt::AlignCenter);
     layout->addWidget(subtitle);
+
+    // ---- 景区选择 + 用户切换 行 ----
+    QHBoxLayout* topRow = new QHBoxLayout();
+    topRow->setSpacing(12);
+
+    // 景区/校园选择器
+    QLabel* campusLabel = new QLabel("🏛️ 目的地");
+    campusLabel->setStyleSheet(
+        "color: rgba(255,255,255,0.9); font-size: 12px; font-weight: 600;");
+    topRow->addWidget(campusLabel);
+
+    m_campusSelect = new QComboBox();
+    m_campusSelect->setMinimumWidth(180);
+    m_campusSelect->setStyleSheet(
+        "QComboBox { background: rgba(255,255,255,0.9); border-radius: 12px;"
+        "padding: 6px 12px; font-size: 12px; color: #0a2b3e; }"
+        "QComboBox:hover { background: white; }"
+        "QComboBox QAbstractItemView { max-height: 300px; }");
+    // 填充200个景区
+    const auto& campuses = getAllCampuses();
+    for (int i = 0; i < campuses.size(); ++i) {
+        QString display = QString("%1  ★%2  %3")
+            .arg(campuses[i].name)
+            .arg(campuses[i].heat, 0, 'f', 1)
+            .arg(campuses[i].city);
+        m_campusSelect->addItem(display, i);
+    }
+    connect(m_campusSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onCampusChanged);
+    topRow->addWidget(m_campusSelect, 1);
+
+    // 用户切换
+    QLabel* userLabel = new QLabel("👤");
+    userLabel->setStyleSheet("color: rgba(255,255,255,0.9); font-size: 12px;");
+    topRow->addWidget(userLabel);
+
+    m_userSelect = new QComboBox();
+    m_userSelect->setMaximumWidth(130);
+    m_userSelect->setStyleSheet(
+        "QComboBox { background: rgba(255,255,255,0.9); border-radius: 12px;"
+        "padding: 6px 10px; font-size: 12px; color: #0a2b3e; }"
+        "QComboBox:hover { background: white; }");
+    for (const auto& u : m_userManager.allUsers()) {
+        m_userSelect->addItem(u.avatar + " " + u.nickname, u.userId);
+    }
+    connect(m_userSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onUserChanged);
+    topRow->addWidget(m_userSelect);
+
+    layout->addLayout(topRow);
 
     // 统计信息
     m_statsLabel = new QLabel();
     m_statsLabel->setAlignment(Qt::AlignCenter);
     m_statsLabel->setStyleSheet(
         "color: rgba(255,255,255,0.9);"
-        "font-size: 12px;"
+        "font-size: 11px;"
         "font-weight: 600;"
         "background: rgba(255,255,255,0.15);"
         "border-radius: 20px;"
-        "padding: 6px 16px;"
-        "margin-top: 12px;"
+        "padding: 4px 16px;"
+        "margin-top: 8px;"
     );
     layout->addWidget(m_statsLabel, 0, Qt::AlignCenter);
 
@@ -794,6 +845,33 @@ void MainWindow::onFinishNavigation()
 {
     m_mapWidget->clearNavigationPath();
     m_finishBtn->setEnabled(false);
+}
+
+void MainWindow::onCampusChanged(int index)
+{
+    if (index < 0) return;
+    int campusIdx = m_campusSelect->currentData().toInt();
+    const auto& campuses = getAllCampuses();
+    if (campusIdx < 0 || campusIdx >= campuses.size()) return;
+
+    const CampusInfo& ci = campuses[campusIdx];
+    // 更新统计信息显示
+    updateStats();
+
+    // 更新窗口标题
+    setWindowTitle(QString("%1 · 校园导航系统").arg(ci.name));
+}
+
+void MainWindow::onUserChanged(int index)
+{
+    if (index < 0) return;
+    QString userId = m_userSelect->currentData().toString();
+    m_userManager.setCurrentUser(userId);
+    m_currentDiary.userId = userId;
+
+    // 更新日记管理器存储路径
+    m_diaryManager.setStoragePath(
+        QApplication::applicationDirPath() + "/data/" + userId);
 }
 
 // ============================================================
