@@ -120,9 +120,24 @@ struct DiaryEntry {
     QString                 publishedAt;    // 发布时间（草稿为空）
     QString                 userId;         // 用户ID
     QString                 userNickname;   // 用户昵称
+    int                     views;          // 浏览次数（热度）
+    int                     ratingSum;      // 评分总和
+    int                     ratingCount;    // 评分人次
 
-    DiaryEntry() : id(0) {
+    DiaryEntry() : id(0), views(0), ratingSum(0), ratingCount(0) {
         createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
+    }
+
+    // 平均评分 (0.0 ~ 5.0)
+    double avgRating() const {
+        if (ratingCount == 0) return 0.0;
+        return static_cast<double>(ratingSum) / ratingCount;
+    }
+
+    // 添加评分 (1~5)
+    void addRating(int score) {
+        ratingSum += score;
+        ratingCount += 1;
     }
 
     // 获取预览文本（前50个字符）
@@ -142,6 +157,9 @@ struct DiaryEntry {
         obj["userId"]     = userId;
         obj["userNickname"] = userNickname;
         obj["preview"]    = preview();
+        obj["views"]      = views;
+        obj["ratingSum"]  = ratingSum;
+        obj["ratingCount"] = ratingCount;
 
         QJsonArray photoArr;
         for (const auto& p : photos) {
@@ -169,6 +187,9 @@ struct DiaryEntry {
         entry.publishedAt  = obj["publishedAt"].toString();
         entry.userId       = obj["userId"].toString();
         entry.userNickname = obj["userNickname"].toString();
+        entry.views        = obj["views"].toInt();
+        entry.ratingSum    = obj["ratingSum"].toInt();
+        entry.ratingCount  = obj["ratingCount"].toInt();
 
         QJsonArray photoArr = obj["photos"].toArray();
         for (const auto& p : photoArr) {
@@ -209,6 +230,12 @@ public:
                       const QString& campusName, const QString& nickname);
     static bool removePublished(const QString& dataDir, int index);
     static int  publishedCount(const QString& dataDir);
+
+    // 增加浏览次数（热度）
+    static bool incrementViews(const QString& dataDir, int index);
+
+    // 添加评分 (1~5)
+    static bool addRating(const QString& dataDir, int index, int score);
 
     // ========== 图片管理 ==========
     QString copyPhotoToStorage(const QString& sourcePath);

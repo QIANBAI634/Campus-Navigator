@@ -144,6 +144,23 @@ int DiaryManager::publishedCount(const QString& dataDir)
     return loadPublished(dataDir).size();
 }
 
+bool DiaryManager::incrementViews(const QString& dataDir, int index)
+{
+    QVector<DiaryEntry> published = loadPublished(dataDir);
+    if (index < 0 || index >= published.size()) return false;
+    published[index].views += 1;
+    return savePublished(dataDir, published);
+}
+
+bool DiaryManager::addRating(const QString& dataDir, int index, int score)
+{
+    QVector<DiaryEntry> published = loadPublished(dataDir);
+    if (index < 0 || index >= published.size()) return false;
+    if (score < 1 || score > 5) return false;
+    published[index].addRating(score);
+    return savePublished(dataDir, published);
+}
+
 // ========== 图片管理 ==========
 
 QString DiaryManager::copyPhotoToStorage(const QString& sourcePath)
