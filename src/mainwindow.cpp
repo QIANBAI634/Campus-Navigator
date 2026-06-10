@@ -1500,63 +1500,23 @@ void MainWindow::onViewTimeline(int activeIndex)
         double avg = item.avgRating();
         QLabel* ratingDisplay = new QLabel();
         ratingDisplay->setStyleSheet("font-size:12px; color:#f59e0b; font-weight:700;");
-
-        auto updateRatingDisplay = [ratingDisplay](const DiaryEntry& e) {
-            double a = e.avgRating();
+        {
             QString starStr;
             for (int s = 1; s <= 5; ++s)
-                starStr += (s <= static_cast<int>(a)) ? "★" : "☆";
-            if (a > 0)
+                starStr += (s <= static_cast<int>(avg)) ? QChar(0x2605) : QChar(0x2606);
+            if (avg > 0)
                 ratingDisplay->setText(QString("⭐ %1  (%2分 · %3人评)")
-                    .arg(starStr).arg(a, 0, 'f', 1).arg(e.ratingCount));
+                    .arg(starStr).arg(avg, 0, 'f', 1).arg(item.ratingCount));
             else
                 ratingDisplay->setText("⭐ 暂无评分");
-        };
-        updateRatingDisplay(item);
+        }
         statsRow->addWidget(ratingDisplay);
         statsRow->addStretch();
         cardLayout->addLayout(statsRow);
 
-        // 评分星星行（交互式：点击实心填充左侧）
-        QHBoxLayout* ratingBtnRow = new QHBoxLayout();
-        ratingBtnRow->setSpacing(4);
-        QLabel* ratePrompt = new QLabel("你的评分:");
-        ratePrompt->setStyleSheet("font-size:11px; color:#7f9aaa;");
-        ratingBtnRow->addWidget(ratePrompt);
-
+        // 操作按钮行：仅"查看详情"
+        QHBoxLayout* actionRow = new QHBoxLayout();
         int cardIndex = i;
-        QVector<QPushButton*> starBtns;
-        for (int s = 1; s <= 5; ++s) {
-            QPushButton* starBtn = new QPushButton("☆");
-            starBtn->setFixedSize(30, 30);
-            starBtn->setCursor(Qt::PointingHandCursor);
-            starBtn->setStyleSheet(
-                "QPushButton { background: transparent; border: none;"
-                "font-size: 22px; color: #f59e0b; }"
-                "QPushButton:hover { font-size: 26px; }");
-            starBtn->setToolTip(QString("评分 %1 分").arg(s));
-            starBtns.append(starBtn);
-
-            connect(starBtn, &QPushButton::clicked, this,
-                [this, cardIndex, s, globalDir, ratingDisplay, starBtns, updateRatingDisplay]() {
-                    if (DiaryManager::addRating(globalDir, cardIndex, s)) {
-                        // 读取最新数据
-                        QVector<DiaryEntry> updated = DiaryManager::loadPublished(globalDir);
-                        if (cardIndex < updated.size()) {
-                            // 更新平均分显示
-                            updateRatingDisplay(updated[cardIndex]);
-                            // 更新星星状态：左填实心★，右留空心☆
-                            for (int j = 0; j < 5; ++j) {
-                                starBtns[j]->setText(j < s ? "★" : "☆");
-                            }
-                        }
-                    }
-                });
-            ratingBtnRow->addWidget(starBtn);
-        }
-        ratingBtnRow->addStretch();
-
-        // "查看详情" 按钮
         QPushButton* detailBtn = new QPushButton("📖 查看详情");
         detailBtn->setStyleSheet(
             "QPushButton { background:#e9f2f5; border:none; border-radius:16px;"
@@ -1565,9 +1525,9 @@ void MainWindow::onViewTimeline(int activeIndex)
         detailBtn->setCursor(Qt::PointingHandCursor);
         connect(detailBtn, &QPushButton::clicked, this,
             [this, cardIndex]() { showDiaryDetail(cardIndex); });
-        ratingBtnRow->addWidget(detailBtn);
-
-        cardLayout->addLayout(ratingBtnRow);
+        actionRow->addWidget(detailBtn);
+        actionRow->addStretch();
+        cardLayout->addLayout(actionRow);
 
         // 内容
         QLabel* content = new QLabel(item.content.isEmpty() ? "（无内容）" : item.content);
@@ -1725,57 +1685,77 @@ void MainWindow::showDiaryDetail(int index)
 
     // 平均评分
     QHBoxLayout* sr = new QHBoxLayout();
-    double avg = item.avgRating();
-    QString starsStr;
-    for (int s = 1; s <= 5; ++s)
-        starsStr += (s <= static_cast<int>(avg)) ? "★" : "☆";
     QLabel* avgLabel = new QLabel();
-    avgLabel->setStyleSheet("font-size:14px; color:#f59e0b; font-weight:700;");
+    avgLabel->setStyleSheet("font-size:16px; color:#c4860b; font-weight:700;");
 
-    auto refreshAvg = [avgLabel](const DiaryEntry& e) {
+    auto buildAvgText = [](const DiaryEntry& e) -> QString {
         double a = e.avgRating();
         QString ss;
-        for (int s = 1; s <= 5; ++s)
-            ss += (s <= static_cast<int>(a)) ? "★" : "☆";
+        for (int k = 1; k <= 5; ++k)
+            ss += (k <= static_cast<int>(a)) ? QChar(0x2605)   // ★ 实心黑星
+                 : QChar(0x2606);                               // ☆ 空心星
         if (a > 0)
-            avgLabel->setText(QString("⭐ %1  (%2分 · %3人评)")
-                .arg(ss).arg(a, 0, 'f', 1).arg(e.ratingCount));
+            return QString("评分  %1  %2分  (%3人评)")
+                .arg(ss).arg(a, 0, 'f', 1).arg(e.ratingCount);
         else
-            avgLabel->setText("⭐ 暂无评分");
+            return QString::fromUtf8("评分  暂无  (点击下方星星打分)");
     };
-    refreshAvg(item);
+    avgLabel->setText(buildAvgText(item));
     sr->addWidget(avgLabel);
     sr->addStretch();
     cl->addLayout(sr);
 
-    // 交互式评分星星
+    // 交互式评分星星 — 大号、清晰、空心☆/实心★
     QHBoxLayout* rr = new QHBoxLayout();
-    rr->setSpacing(4);
-    QLabel* rp = new QLabel("你的评分:");
-    rp->setStyleSheet("font-size:13px; color:#7f9aaa; font-weight:600;");
+    rr->setSpacing(8);
+    QLabel* rp = new QLabel(QString::fromUtf8("\347\202\271\345\207\273\346\211\223\345\210\206\357\274\232"));  // "点击打分："
+    rp->setStyleSheet("font-size:14px; color:#5e7a8c; font-weight:600;");
     rr->addWidget(rp);
 
     QVector<QPushButton*> sbtns;
-    for (int s = 1; s <= 5; ++s) {
-        QPushButton* sb = new QPushButton("☆");
-        sb->setFixedSize(36, 36);
+    int itemIndex = index;
+    QString dataDir = globalDir;
+
+    for (int star = 1; star <= 5; ++star) {
+        QPushButton* sb = new QPushButton(QChar(0x2606));  // ☆
+        sb->setFixedSize(48, 48);
         sb->setCursor(Qt::PointingHandCursor);
         sb->setStyleSheet(
-            "QPushButton { background: transparent; border: none;"
-            "font-size: 26px; color: #f59e0b; }"
-            "QPushButton:hover { font-size: 30px; }");
-        sb->setToolTip(QString("评分 %1 分").arg(s));
+            "QPushButton {"
+            "  background: transparent;"
+            "  border: 2px solid #e0c040;"
+            "  border-radius: 8px;"
+            "  font-size: 28px;"
+            "  color: #c4860b;"
+            "}"
+            "QPushButton:hover {"
+            "  background: #fff8e0;"
+            "  border-color: #f59e0b;"
+            "  font-size: 32px;"
+            "}");
+        sb->setToolTip(QString("%1 \345\210\206").arg(star));  // "N 分"
         sbtns.append(sb);
 
+        int score = star;
+        // 每个按钮独立 connect，只捕获原始类型和指针 — 无嵌套 lambda
         connect(sb, &QPushButton::clicked, this,
-            [this, index, s, globalDir, avgLabel, sbtns, refreshAvg]() {
-                if (DiaryManager::addRating(globalDir, index, s)) {
-                    QVector<DiaryEntry> updated = DiaryManager::loadPublished(globalDir);
-                    if (index < updated.size()) {
-                        refreshAvg(updated[index]);
-                        for (int j = 0; j < 5; ++j)
-                            sbtns[j]->setText(j < s ? "★" : "☆");
-                    }
+            [this, itemIndex, score, dataDir, avgLabel, sbtns, buildAvgText]() {
+                // 1. 保存评分
+                if (!DiaryManager::addRating(dataDir, itemIndex, score)) return;
+
+                // 2. 重载数据
+                QVector<DiaryEntry> fresh = DiaryManager::loadPublished(dataDir);
+                if (itemIndex >= fresh.size()) return;
+                const DiaryEntry& entry = fresh[itemIndex];
+
+                // 3. 刷新平均分标签
+                avgLabel->setText(buildAvgText(entry));
+
+                // 4. 刷新星星按钮（左填实心，右留空心）
+                for (int k = 0; k < 5; ++k) {
+                    sbtns[k]->setText(k < score
+                        ? QChar(0x2605)    // ★
+                        : QChar(0x2606));  // ☆
                 }
             });
         rr->addWidget(sb);
