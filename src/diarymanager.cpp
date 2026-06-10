@@ -152,12 +152,13 @@ bool DiaryManager::incrementViews(const QString& dataDir, int index)
     return savePublished(dataDir, published);
 }
 
-bool DiaryManager::addRating(const QString& dataDir, int index, int score)
+bool DiaryManager::setUserRating(const QString& dataDir, int index,
+                                  const QString& userId, int score)
 {
     QVector<DiaryEntry> published = loadPublished(dataDir);
     if (index < 0 || index >= published.size()) return false;
     if (score < 1 || score > 5) return false;
-    published[index].addRating(score);
+    published[index].setUserRating(userId, score);
     return savePublished(dataDir, published);
 }
 

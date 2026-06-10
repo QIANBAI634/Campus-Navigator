@@ -121,23 +121,31 @@ struct DiaryEntry {
     QString                 userId;         // 用户ID
     QString                 userNickname;   // 用户昵称
     int                     views;          // 浏览次数（热度）
-    int                     ratingSum;      // 评分总和
-    int                     ratingCount;    // 评分人次
+    QMap<QString, int>      userRatings;    // 用户评分：userId → score (1~5)
 
-    DiaryEntry() : id(0), views(0), ratingSum(0), ratingCount(0) {
+    DiaryEntry() : id(0), views(0) {
         createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
     }
 
-    // 平均评分 (0.0 ~ 5.0)
+    // 平均评分 (0.0 ~ 5.0) — 从 userRatings 实时计算
     double avgRating() const {
-        if (ratingCount == 0) return 0.0;
-        return static_cast<double>(ratingSum) / ratingCount;
+        if (userRatings.isEmpty()) return 0.0;
+        double sum = 0.0;
+        for (int s : userRatings.values()) sum += s;
+        return sum / userRatings.size();
     }
 
-    // 添加评分 (1~5)
-    void addRating(int score) {
-        ratingSum += score;
-        ratingCount += 1;
+    // 评分人次
+    int ratingCount() const { return userRatings.size(); }
+
+    // 设置/替换某用户的评分（同一用户只能评一次，后评覆盖前评）
+    void setUserRating(const QString& uid, int score) {
+        userRatings[uid] = score;
+    }
+
+    // 获取某用户的评分（0 表示未评）
+    int getUserRating(const QString& uid) const {
+        return userRatings.value(uid, 0);
     }
 
     // 获取预览文本（前50个字符）
@@ -158,8 +166,12 @@ struct DiaryEntry {
         obj["userNickname"] = userNickname;
         obj["preview"]    = preview();
         obj["views"]      = views;
-        obj["ratingSum"]  = ratingSum;
-        obj["ratingCount"] = ratingCount;
+
+        // userRatings → JSON
+        QJsonObject ratingsObj;
+        for (auto it = userRatings.constBegin(); it != userRatings.constEnd(); ++it)
+            ratingsObj[it.key()] = it.value();
+        obj["userRatings"] = ratingsObj;
 
         QJsonArray photoArr;
         for (const auto& p : photos) {
@@ -188,8 +200,11 @@ struct DiaryEntry {
         entry.userId       = obj["userId"].toString();
         entry.userNickname = obj["userNickname"].toString();
         entry.views        = obj["views"].toInt();
-        entry.ratingSum    = obj["ratingSum"].toInt();
-        entry.ratingCount  = obj["ratingCount"].toInt();
+
+        // userRatings from JSON
+        QJsonObject ratingsObj = obj["userRatings"].toObject();
+        for (auto it = ratingsObj.constBegin(); it != ratingsObj.constEnd(); ++it)
+            entry.userRatings[it.key()] = it.value().toInt();
 
         QJsonArray photoArr = obj["photos"].toArray();
         for (const auto& p : photoArr) {
@@ -234,8 +249,9 @@ public:
     // 增加浏览次数（热度）
     static bool incrementViews(const QString& dataDir, int index);
 
-    // 添加评分 (1~5)
-    static bool addRating(const QString& dataDir, int index, int score);
+    // 设置用户评分 (1~5)，同一用户后评覆盖前评
+    static bool setUserRating(const QString& dataDir, int index,
+                              const QString& userId, int score);
 
     // ========== 图片管理 ==========
     QString copyPhotoToStorage(const QString& sourcePath);
