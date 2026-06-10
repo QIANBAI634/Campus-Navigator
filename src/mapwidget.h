@@ -43,6 +43,12 @@ public:
     // 是否有活跃的导航路径
     bool hasActivePath() const { return m_pathActive; }
 
+    // 高亮显示附近设施（金色闪烁圆环）
+    void highlightFacilities(const QVector<int>& nodeIndices);
+
+    // 清除设施高亮
+    void clearFacilityHighlights();
+
 protected:
     // 窗口大小改变时自动缩放地图以适配
     void resizeEvent(QResizeEvent *event) override;
@@ -62,6 +68,9 @@ private:
     // 起点/终点特殊标注
     QGraphicsEllipseItem      *m_startMarker;
     QGraphicsEllipseItem      *m_endMarker;
+
+    // 附近设施高亮标注
+    QVector<QGraphicsEllipseItem*> m_highlightItems;
 
     bool  m_pathActive;
     QPixmap m_basePixmap;  // 原始地图图片

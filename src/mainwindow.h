@@ -49,6 +49,9 @@ private slots:
     void onCampusChanged(int index); // 切换景区/校园
     void onUserChanged(int index);   // 切换用户
 
+    // ========== 场所查询 ==========
+    void onQueryNearbyFacilities();  // 查询附近设施
+
     // ========== 日记相关 ==========
     void onCategoryChanged();       // 分类按钮切换
     void onTextChanged();           // 日记文本变化（字数统计）
@@ -65,6 +68,7 @@ private:
     void setupUI();
     QWidget* createHeaderPanel();
     QWidget* createNavigationPanel();
+    QWidget* createNearbyFacilityPanel();   // 附近设施查询面板
     QWidget* createDiaryPanel();
     QWidget* createDraftListPanel();
     QWidget* createPublishedPanel();
@@ -97,6 +101,15 @@ private:
     MapWidget*     m_mapWidget;
     QLabel*        m_distanceLabel;
     QLabel*        m_pathDisplay;
+
+    // ========== 场所查询 UI 元素 ==========
+    QComboBox*     m_facilityCenterSelect;
+    QComboBox*     m_facilityRangeSelect;
+    QComboBox*     m_facilityCategorySelect;
+    QPushButton*   m_queryNearbyBtn;
+    QLabel*        m_nearbyResultLabel;
+    QVBoxLayout*   m_nearbyResultLayout;
+    int            m_activeCenterIdx;     // 当前查询的中心节点索引
 
     // ========== 日记 UI 元素 ==========
     QVector<QPushButton*> m_categoryBtns;

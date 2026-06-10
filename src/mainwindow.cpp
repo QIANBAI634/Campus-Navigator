@@ -40,6 +40,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_currentDiary.id = QDateTime::currentMSecsSinceEpoch();
     m_currentDiary.category = DiaryCategory::TRAVEL_NOTE;
     m_currentDiary.userId = "current_user";
+    m_activeCenterIdx = -1;
 
     // 构建 UI
     applyGlobalStylesheet();
@@ -207,6 +208,7 @@ void MainWindow::setupUI()
     // 添加各面板
     mainLayout->addWidget(createHeaderPanel());
     mainLayout->addWidget(createNavigationPanel());
+    mainLayout->addWidget(createNearbyFacilityPanel());  // 附近设施查询
 
     // 分隔线
     QFrame* sep = new QFrame();
@@ -569,6 +571,128 @@ QWidget* MainWindow::createNavigationPanel()
 }
 
 // ============================================================
+// 附近设施查询面板
+// ============================================================
+
+QWidget* MainWindow::createNearbyFacilityPanel()
+{
+    QWidget* panel = new QWidget();
+    panel->setStyleSheet(
+        "background: #f8fafc;"
+        "border-radius: 24px;"
+        "padding: 20px;"
+        "margin: 12px 28px;"
+        "border: 1px solid #e2edf2;"
+    );
+    QVBoxLayout* layout = new QVBoxLayout(panel);
+    layout->setSpacing(12);
+
+    // 标题行
+    QHBoxLayout* titleRow = new QHBoxLayout();
+    QLabel* title = new QLabel("🔍 附近设施查询");
+    title->setStyleSheet("font-size:16px; font-weight:700; color:#0f5b7a; background:transparent;");
+    titleRow->addWidget(title);
+
+    // 提示：点击"完成导航"后默认从终点查询
+    QLabel* tip = new QLabel("基于实际步行距离（非直线距离）");
+    tip->setStyleSheet("font-size:11px; color:#7f9aaa; background:transparent;");
+    titleRow->addWidget(tip);
+    titleRow->addStretch();
+    layout->addLayout(titleRow);
+
+    // 第一行：当前位置 + 搜索范围
+    QHBoxLayout* row1 = new QHBoxLayout();
+    row1->setSpacing(12);
+
+    QLabel* centerLabel = new QLabel("📍 所在位置");
+    centerLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 14px; font-size:12px;");
+    row1->addWidget(centerLabel);
+
+    m_facilityCenterSelect = new QComboBox();
+    m_facilityCenterSelect->setMinimumWidth(180);
+    m_facilityCenterSelect->setToolTip("选择你当前所在的地标位置");
+    row1->addWidget(m_facilityCenterSelect, 2);
+
+    QLabel* rangeLabel = new QLabel("📏 范围");
+    rangeLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 14px; font-size:12px;");
+    row1->addWidget(rangeLabel);
+
+    m_facilityRangeSelect = new QComboBox();
+    m_facilityRangeSelect->addItems({"100m", "200m", "300m", "500m", "800m", "1000m", "全部"});
+    m_facilityRangeSelect->setCurrentIndex(3); // 默认500m
+    m_facilityRangeSelect->setMaximumWidth(100);
+    row1->addWidget(m_facilityRangeSelect);
+
+    layout->addLayout(row1);
+
+    // 第二行：类别过滤 + 查询按钮
+    QHBoxLayout* row2 = new QHBoxLayout();
+    row2->setSpacing(12);
+
+    QLabel* catLabel = new QLabel("🏷️ 类别");
+    catLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 14px; font-size:12px;");
+    row2->addWidget(catLabel);
+
+    m_facilityCategorySelect = new QComboBox();
+    m_facilityCategorySelect->addItem("全部类别");
+    m_facilityCategorySelect->addItems({
+        "出入口", "餐饮", "购物", "住宿", "教学", "行政",
+        "运动", "医疗", "学习", "休闲", "卫生", "金融", "邮政", "交通"
+    });
+    row2->addWidget(m_facilityCategorySelect, 2);
+
+    m_queryNearbyBtn = new QPushButton("🔍 查询附近设施");
+    m_queryNearbyBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #1f6d49;"
+        "  color: white;"
+        "  border: none;"
+        "  border-radius: 24px;"
+        "  padding: 10px 20px;"
+        "  font-size: 14px;"
+        "  font-weight: 600;"
+        "}"
+        "QPushButton:hover { background: #0e5437; }"
+        "QPushButton:pressed { background: #0a3d28; }"
+    );
+    m_queryNearbyBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_queryNearbyBtn, &QPushButton::clicked,
+            this, &MainWindow::onQueryNearbyFacilities);
+    row2->addWidget(m_queryNearbyBtn);
+
+    layout->addLayout(row2);
+
+    // 结果列表区域
+    m_nearbyResultLabel = new QLabel("💡 选择一个位置，点击查询，查看附近设施");
+    m_nearbyResultLabel->setWordWrap(true);
+    m_nearbyResultLabel->setStyleSheet(
+        "background: #fefce8;"
+        "border-left: 4px solid #1f6d49;"
+        "border-radius: 14px;"
+        "padding: 10px 16px;"
+        "font-size: 13px;"
+        "color: #1f2f38;"
+    );
+    layout->addWidget(m_nearbyResultLabel);
+
+    // 结果列表容器（动态生成）
+    QWidget* resultContainer = new QWidget();
+    resultContainer->setStyleSheet("background: transparent;");
+    m_nearbyResultLayout = new QVBoxLayout(resultContainer);
+    m_nearbyResultLayout->setContentsMargins(0, 0, 0, 0);
+    m_nearbyResultLayout->setSpacing(6);
+    layout->addWidget(resultContainer);
+
+    return panel;
+}
+
+// ============================================================
 // 日记面板
 // ============================================================
 
@@ -791,6 +915,12 @@ void MainWindow::populateSelectors()
         m_startSelect->addItem(lm.name, lm.name);
         m_endSelect->addItem(lm.name, lm.name);
     }
+
+    // 填充附近设施查询的"所在位置"选择器
+    m_facilityCenterSelect->addItem("—— 选择当前位置 ——", QVariant());
+    for (const auto& lm : landmarks) {
+        m_facilityCenterSelect->addItem(lm.name, lm.name);
+    }
 }
 
 void MainWindow::updateStats()
@@ -941,6 +1071,130 @@ void MainWindow::onFinishNavigation()
 {
     m_mapWidget->clearNavigationPath();
     m_finishBtn->setEnabled(false);
+}
+
+// ============================================================
+// 附近设施查询槽函数
+// ============================================================
+
+void MainWindow::onQueryNearbyFacilities()
+{
+    // 清除上次的高亮
+    m_mapWidget->clearFacilityHighlights();
+
+    // 清空上次结果
+    QLayoutItem* child;
+    while ((child = m_nearbyResultLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+
+    QString centerName = m_facilityCenterSelect->currentData().toString();
+    if (centerName.isEmpty()) {
+        m_nearbyResultLabel->setStyleSheet(
+            "background:#fff2e6; color:#c2410c;"
+            "border-radius:14px; padding:10px 16px; font-size:13px;");
+        m_nearbyResultLabel->setText("❌ 请先选择当前位置");
+        return;
+    }
+
+    int centerIdx = m_graph.indexOf(centerName);
+    if (centerIdx < 0) {
+        m_nearbyResultLabel->setText("⚠️ 未找到该位置");
+        return;
+    }
+
+    // 解析范围
+    QString rangeText = m_facilityRangeSelect->currentText();
+    double maxRange = 1e9;  // "全部"
+    if (rangeText != "全部") {
+        maxRange = rangeText.chopped(1).toDouble();  // "500m" → 500
+    }
+
+    // 解析类别过滤
+    QString catFilter = m_facilityCategorySelect->currentText();
+    if (catFilter == "全部类别") catFilter.clear();
+
+    // 执行查询
+    QVector<NearbyFacility> results = m_graph.findNearbyFacilities(
+        centerIdx, maxRange, catFilter);
+
+    // 显示结果
+    if (results.isEmpty()) {
+        m_nearbyResultLabel->setStyleSheet(
+            "background:#fefce8; border-left:4px solid #f59e0b;"
+            "border-radius:14px; padding:10px 16px; font-size:13px; color:#1f2f38;");
+        m_nearbyResultLabel->setText(
+            QString("📭 在 %1 范围内未找到%2设施")
+                .arg(rangeText)
+                .arg(catFilter.isEmpty() ? "" : catFilter + " "));
+        return;
+    }
+
+    // 统计信息
+    m_nearbyResultLabel->setStyleSheet(
+        "background:#fefce8; border-left:4px solid #1f6d49;"
+        "border-radius:14px; padding:10px 16px; font-size:13px; color:#1f2f38;");
+    m_nearbyResultLabel->setText(
+        QString("✅ 找到 %1 个%2设施（%3 范围内，实际步行距离）")
+            .arg(results.size())
+            .arg(catFilter.isEmpty() ? "" : catFilter + " ")
+            .arg(rangeText));
+
+    // 构建结果条目
+    QVector<int> highlightIndices;
+    for (int i = 0; i < results.size(); ++i) {
+        const auto& f = results[i];
+        highlightIndices.append(f.nodeIndex);
+
+        QWidget* row = new QWidget();
+        row->setStyleSheet(
+            "background: white; border-radius: 12px; padding: 8px 14px;"
+            "border: 1px solid #e2edf2;");
+        QHBoxLayout* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(0, 0, 0, 0);
+        rl->setSpacing(8);
+
+        // 序号 + emoji
+        static const QMap<QString, QString> emojiMap = {
+            {"出入口", "🏠"}, {"餐饮", "🍽️"}, {"购物", "🛒"}, {"住宿", "🛏️"},
+            {"教学", "📖"}, {"行政", "🏛️"}, {"运动", "⚽"}, {"医疗", "🏥"},
+            {"学习", "📚"}, {"休闲", "☕"}, {"卫生", "🚻"}, {"金融", "💰"},
+            {"邮政", "📮"}, {"交通", "🚌"}
+        };
+        QString emoji = emojiMap.value(f.category, "📍");
+
+        QLabel* numLabel = new QLabel(QString("#%1").arg(i + 1));
+        numLabel->setStyleSheet(
+            "font-weight:700; font-size:11px; color:#1f6d49; background:transparent;"
+            "min-width:24px;");
+        rl->addWidget(numLabel);
+
+        QLabel* emojiLabel = new QLabel(emoji);
+        emojiLabel->setStyleSheet("font-size:16px; background:transparent;");
+        rl->addWidget(emojiLabel);
+
+        QLabel* nameLabel = new QLabel(f.name);
+        nameLabel->setStyleSheet(
+            "font-weight:600; font-size:13px; color:#1e4a6b; background:transparent;");
+        rl->addWidget(nameLabel, 1);
+
+        QLabel* cat = new QLabel(f.category);
+        cat->setStyleSheet(
+            "background:#e9f2f5; border-radius:10px; padding:2px 10px;"
+            "font-size:10px; color:#1e4a6b;");
+        rl->addWidget(cat);
+
+        QLabel* dist = new QLabel(QString("🚶 %1m").arg(static_cast<int>(f.distance)));
+        dist->setStyleSheet(
+            "font-weight:700; font-size:12px; color:#0f5b7a; background:transparent;");
+        rl->addWidget(dist);
+
+        m_nearbyResultLayout->addWidget(row);
+    }
+
+    // 在地图上高亮
+    m_mapWidget->highlightFacilities(highlightIndices);
 }
 
 void MainWindow::onCampusChanged(int index)

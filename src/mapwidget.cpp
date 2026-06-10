@@ -135,6 +135,44 @@ void MapWidget::clearNavigationPath()
     m_pathActive = false;
 }
 
+void MapWidget::highlightFacilities(const QVector<int>& nodeIndices)
+{
+    clearFacilityHighlights();
+
+    if (!m_graph) return;
+    const auto& nodes = m_graph->nodes();
+
+    for (int idx : nodeIndices) {
+        double px = nodes[idx].pixelX;
+        double py = nodes[idx].pixelY;
+
+        // 金色粗圆环标注
+        auto* ring = m_scene->addEllipse(
+            px - DOT_RADIUS * 2.5, py - DOT_RADIUS * 2.5,
+            DOT_RADIUS * 5, DOT_RADIUS * 5,
+            QPen(QColor(255, 180, 0), 3.0), QBrush(Qt::transparent));
+        ring->setZValue(3);
+        m_highlightItems.append(ring);
+
+        // 内部发光
+        auto* glow = m_scene->addEllipse(
+            px - DOT_RADIUS * 1.8, py - DOT_RADIUS * 1.8,
+            DOT_RADIUS * 3.6, DOT_RADIUS * 3.6,
+            QPen(Qt::NoPen), QBrush(QColor(255, 200, 50, 80)));
+        glow->setZValue(3);
+        m_highlightItems.append(glow);
+    }
+}
+
+void MapWidget::clearFacilityHighlights()
+{
+    for (auto* item : m_highlightItems) {
+        m_scene->removeItem(item);
+        delete item;
+    }
+    m_highlightItems.clear();
+}
+
 void MapWidget::resizeEvent(QResizeEvent *event)
 {
     QGraphicsView::resizeEvent(event);

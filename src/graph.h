@@ -31,6 +31,14 @@ struct Edge {
     double weight;  // 边权（米，基于经纬度计算）
 };
 
+// 附近设施查询结果
+struct NearbyFacility {
+    int    nodeIndex;   // 设施节点索引
+    double distance;    // 实际步行距离（米），基于 Dijkstra 路径
+    QString name;       // 设施名称
+    QString category;   // 设施类别
+};
+
 /**
  * 校园图类
  * 封装了图构建、最短路径计算、路径显示等功能
@@ -97,6 +105,18 @@ public:
      * @return 如 "西门 → 菜鸟驿站 → 图书馆" 的字符串
      */
     QString formatPathDisplay(const QVector<int>& indices) const;
+
+    /**
+     * 查询指定节点附近的服务设施
+     * 使用 Dijkstra 计算实际步行距离（非直线距离）
+     * @param centerIdx      中心节点索引（当前所在位置）
+     * @param maxRange       最大搜索范围（米），默认 500 米
+     * @param categoryFilter 设施类别过滤，空字符串表示不过滤
+     * @return 按实际距离排序的附近设施列表
+     */
+    QVector<NearbyFacility> findNearbyFacilities(int centerIdx,
+                                                  double maxRange = 500.0,
+                                                  const QString& categoryFilter = "") const;
 
 private:
     QVector<NodeInfo>           m_nodeList;       // 所有节点
@@ -335,6 +355,40 @@ inline QVector<NodeInfo> CampusGraph::getLandmarks() const
         }
     }
     return result;
+}
+
+inline QVector<NearbyFacility> CampusGraph::findNearbyFacilities(
+    int centerIdx, double maxRange, const QString& categoryFilter) const
+{
+    QVector<NearbyFacility> results;
+
+    if (centerIdx < 0 || centerIdx >= m_nodeCount) return results;
+
+    // 运行 Dijkstra 计算从 center 到所有节点的实际路径距离
+    auto [dist, prev] = dijkstra(centerIdx, -1);
+
+    for (int i = 0; i < m_nodeCount; ++i) {
+        // 只考虑地标节点（设施），排除中心节点自身
+        if (i == centerIdx) continue;
+        if (m_nodeList[i].type != "landmark") continue;
+
+        double d = dist[i];
+        if (!std::isfinite(d) || d > maxRange) continue;
+
+        const QString& ft = m_nodeList[i].facilityType;
+        // 类别过滤：空字符串表示不过滤
+        if (!categoryFilter.isEmpty() && ft != categoryFilter) continue;
+
+        results.append({i, d, m_nodeList[i].name, ft});
+    }
+
+    // 按距离升序排序（稳定排序保留同类内的相对顺序）
+    std::stable_sort(results.begin(), results.end(),
+        [](const NearbyFacility& a, const NearbyFacility& b) {
+            return a.distance < b.distance;
+        });
+
+    return results;
 }
 
 #endif // GRAPH_H
