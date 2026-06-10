@@ -23,6 +23,7 @@
 #include <QDialogButtonBox>
 #include <QButtonGroup>
 #include <QEvent>
+#include <QLineEdit>
 
 #include "graph.h"
 #include "diarymanager.h"
@@ -52,6 +53,10 @@ private slots:
     // ========== 场所查询 ==========
     void onQueryNearbyFacilities();  // 查询附近设施
 
+    // ========== 旅游推荐 ==========
+    void onRecommendTop();           // 推荐 Top-10 景区
+    void onSearchCampus();           // 搜索景区
+
     // ========== 日记相关 ==========
     void onCategoryChanged();       // 分类按钮切换
     void onTextChanged();           // 日记文本变化（字数统计）
@@ -69,6 +74,7 @@ private:
     void setupUI();
     QWidget* createHeaderPanel();
     QWidget* createNavigationPanel();
+    QWidget* createRecommendPanel();         // 旅游推荐面板
     QWidget* createNearbyFacilityPanel();   // 附近设施查询面板
     QWidget* createDiaryPanel();
     QWidget* createDraftListPanel();
@@ -102,6 +108,15 @@ private:
     MapWidget*     m_mapWidget;
     QLabel*        m_distanceLabel;
     QLabel*        m_pathDisplay;
+
+    // ========== 旅游推荐 UI 元素 ==========
+    QComboBox*     m_recSortSelect;       // 排序方式：热度/评分
+    QComboBox*     m_recTypeSelect;       // 类别过滤
+    QLineEdit*     m_recSearchInput;      // 搜索输入
+    QPushButton*   m_recBtn;              // 推荐按钮
+    QPushButton*   m_recSearchBtn;        // 搜索按钮
+    QLabel*        m_recResultLabel;      // 结果标题
+    QVBoxLayout*   m_recResultLayout;     // 结果列表容器
 
     // ========== 场所查询 UI 元素 ==========
     QComboBox*     m_facilityCenterSelect;

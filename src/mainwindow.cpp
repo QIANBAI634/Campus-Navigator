@@ -210,6 +210,7 @@ void MainWindow::setupUI()
     // 添加各面板
     mainLayout->addWidget(createHeaderPanel());
     mainLayout->addWidget(createNavigationPanel());
+    mainLayout->addWidget(createRecommendPanel());        // 旅游推荐 Top-10
     mainLayout->addWidget(createNearbyFacilityPanel());  // 附近设施查询
 
     // 分隔线
@@ -570,6 +571,296 @@ QWidget* MainWindow::createNavigationPanel()
     layout->addWidget(resultBox);
 
     return panel;
+}
+
+// ============================================================
+// 堆 Top-K 选择（核心算法）
+// 时间复杂度 O(n·logK)，不用全排序即可得到前 K 个结果
+// ============================================================
+
+namespace {
+
+// 小顶堆 siftDown，用于 Top-K 维护
+void heapSiftDown(QVector<CampusInfo>& heap, int i, int heapSize,
+                  bool sortByHeat)  // true=按热度, false=按评分
+{
+    while (true) {
+        int left  = 2 * i + 1;
+        int right = 2 * i + 2;
+        int smallest = i;
+        auto key = [sortByHeat](const CampusInfo& c) {
+            return sortByHeat ? c.heat : c.rating;
+        };
+        if (left  < heapSize && key(heap[left])  < key(heap[smallest])) smallest = left;
+        if (right < heapSize && key(heap[right]) < key(heap[smallest])) smallest = right;
+        if (smallest == i) break;
+        std::swap(heap[i], heap[smallest]);
+        i = smallest;
+    }
+}
+
+// 用小顶堆选 Top-K（不经过全排序）
+QVector<CampusInfo> topKCampuses(const QVector<CampusInfo>& src, int k,
+                                  bool sortByHeat,
+                                  const QString& typeFilter,
+                                  const QString& keyword)
+{
+    // 1. 先筛选
+    QVector<CampusInfo> filtered;
+    for (const auto& c : src) {
+        if (!typeFilter.isEmpty() && c.type != typeFilter) continue;
+        if (!keyword.isEmpty()) {
+            QString hay = c.name + "," + c.type + "," + c.city + "," + c.district + "," + c.tags;
+            if (!hay.contains(keyword, Qt::CaseInsensitive)) continue;
+        }
+        filtered.append(c);
+    }
+    if (filtered.isEmpty()) return {};
+
+    // 2. Top-K 小顶堆
+    auto key = [sortByHeat](const CampusInfo& c) {
+        return sortByHeat ? c.heat : c.rating;
+    };
+    k = qMin(k, filtered.size());
+
+    QVector<CampusInfo> heap;
+    for (int i = 0; i < k; ++i) heap.append(filtered[i]);
+    // 建堆 O(k)
+    for (int i = k / 2 - 1; i >= 0; --i)
+        heapSiftDown(heap, i, k, sortByHeat);
+
+    // 扫描剩余元素 O((n-k)·logk)
+    for (int i = k; i < filtered.size(); ++i) {
+        if (key(filtered[i]) > key(heap[0])) {
+            heap[0] = filtered[i];
+            heapSiftDown(heap, 0, k, sortByHeat);
+        }
+    }
+
+    // 3. 堆排序提取，降序排列 O(k·logk)
+    for (int i = k - 1; i >= 1; --i) {
+        std::swap(heap[0], heap[i]);
+        heapSiftDown(heap, 0, i, sortByHeat);
+    }
+    // 现在 heap 是从最小到最大，反转
+    std::reverse(heap.begin(), heap.end());
+    return heap;
+}
+
+} // anonymous namespace
+
+// ============================================================
+// 旅游推荐面板
+// ============================================================
+
+QWidget* MainWindow::createRecommendPanel()
+{
+    QWidget* panel = new QWidget();
+    panel->setStyleSheet(
+        "background: #f8fafc;"
+        "border-radius: 24px;"
+        "padding: 20px;"
+        "margin: 12px 28px;"
+        "border: 1px solid #e2edf2;"
+    );
+    QVBoxLayout* layout = new QVBoxLayout(panel);
+    layout->setSpacing(12);
+
+    // 标题
+    QLabel* title = new QLabel("🎯 旅游推荐");
+    title->setStyleSheet("font-size:16px; font-weight:700; color:#0f5b7a; background:transparent;");
+    layout->addWidget(title);
+
+    // 第一行：排序方式 + 类别过滤
+    QHBoxLayout* row1 = new QHBoxLayout();
+    row1->setSpacing(12);
+
+    QLabel* sortLabel = new QLabel("排序");
+    sortLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 14px; font-size:12px;");
+    row1->addWidget(sortLabel);
+
+    m_recSortSelect = new QComboBox();
+    m_recSortSelect->addItems({"按热度", "按评分"});
+    m_recSortSelect->setMaximumWidth(110);
+    row1->addWidget(m_recSortSelect);
+
+    QLabel* typeLabel = new QLabel("类别");
+    typeLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 14px; font-size:12px;");
+    row1->addWidget(typeLabel);
+
+    m_recTypeSelect = new QComboBox();
+    m_recTypeSelect->addItem("全部");
+    m_recTypeSelect->addItems({
+        "985高校", "211高校", "景点", "公园", "医院", "商场", "文化场所", "交通枢纽"
+    });
+    m_recTypeSelect->setMaximumWidth(130);
+    row1->addWidget(m_recTypeSelect);
+
+    row1->addStretch();
+
+    // 推荐 Top-10 按钮
+    m_recBtn = new QPushButton("🏆 Top-10 推荐");
+    m_recBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #1f6d49; color: white; border: none;"
+        "  border-radius: 24px; padding: 10px 20px;"
+        "  font-size: 14px; font-weight: 600; }"
+        "QPushButton:hover { background: #0e5437; }");
+    m_recBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_recBtn, &QPushButton::clicked, this, &MainWindow::onRecommendTop);
+    row1->addWidget(m_recBtn);
+
+    layout->addLayout(row1);
+
+    // 第二行：搜索
+    QHBoxLayout* row2 = new QHBoxLayout();
+    row2->setSpacing(12);
+
+    QLabel* searchLabel = new QLabel("🔎 搜索");
+    searchLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 14px; font-size:12px;");
+    row2->addWidget(searchLabel);
+
+    m_recSearchInput = new QLineEdit();
+    m_recSearchInput->setPlaceholderText("输入名称 / 类别 / 标签关键字...");
+    m_recSearchInput->setStyleSheet(
+        "QLineEdit { background: white; border: 1px solid #cbdde6;"
+        "border-radius: 20px; padding: 8px 16px; font-size: 13px; color: #1f2f38; }"
+        "QLineEdit:focus { border-color: #0f5b7a; }");
+    row2->addWidget(m_recSearchInput, 1);
+
+    m_recSearchBtn = new QPushButton("搜索");
+    m_recSearchBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #0f5b7a; color: white; border: none;"
+        "  border-radius: 20px; padding: 8px 18px;"
+        "  font-size: 13px; font-weight: 600; }"
+        "QPushButton:hover { background: #0a3d52; }");
+    m_recSearchBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_recSearchBtn, &QPushButton::clicked, this, &MainWindow::onSearchCampus);
+    row2->addWidget(m_recSearchBtn);
+
+    layout->addLayout(row2);
+
+    // 结果标题
+    m_recResultLabel = new QLabel("💡 点击「Top-10 推荐」查看热门景区，或输入关键字搜索");
+    m_recResultLabel->setWordWrap(true);
+    m_recResultLabel->setStyleSheet(
+        "background: #fefce8; border-left: 4px solid #1f6d49;"
+        "border-radius: 14px; padding: 10px 16px; font-size: 13px; color: #1f2f38;");
+    layout->addWidget(m_recResultLabel);
+
+    // 结果列表容器
+    QWidget* resultContainer = new QWidget();
+    resultContainer->setStyleSheet("background: transparent;");
+    m_recResultLayout = new QVBoxLayout(resultContainer);
+    m_recResultLayout->setContentsMargins(0, 0, 0, 0);
+    m_recResultLayout->setSpacing(6);
+    layout->addWidget(resultContainer);
+
+    return panel;
+}
+
+// ============================================================
+// 旅游推荐槽函数
+// ============================================================
+
+void MainWindow::onRecommendTop()
+{
+    onSearchCampus();  // 推荐 = 无关键字的搜索 + Top-10
+}
+
+void MainWindow::onSearchCampus()
+{
+    // 清空旧结果
+    QLayoutItem* child;
+    while ((child = m_recResultLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+
+    const auto& campuses = getAllCampuses();
+    if (campuses.isEmpty()) return;
+
+    bool byHeat  = (m_recSortSelect->currentText() == "按热度");
+    QString type = m_recTypeSelect->currentText();
+    if (type == "全部") type.clear();
+    QString kw   = m_recSearchInput->text().trimmed();
+
+    // 堆 Top-10 选择（不经过全排序）
+    QVector<CampusInfo> result = topKCampuses(campuses, 10, byHeat, type, kw);
+
+    if (result.isEmpty()) {
+        m_recResultLabel->setStyleSheet(
+            "background:#fff2e6; color:#c2410c;"
+            "border-radius:14px; padding:10px 16px; font-size:13px;");
+        m_recResultLabel->setText("📭 没有找到匹配的景区/学校");
+        return;
+    }
+
+    // 标题
+    QString modeStr = byHeat ? "热度" : "评分";
+    QString typeStr = type.isEmpty() ? "全部" : type;
+    QString kwStr   = kw.isEmpty() ? "" : QString(" · 关键字「%1」").arg(kw);
+    m_recResultLabel->setStyleSheet(
+        "background:#fefce8; border-left:4px solid #1f6d49;"
+        "border-radius:14px; padding:10px 16px; font-size:13px; color:#1f2f38;");
+    m_recResultLabel->setText(
+        QString("🏆 Top-%1 · 按%2 · %3%4")
+            .arg(result.size()).arg(modeStr).arg(typeStr).arg(kwStr));
+
+    // 逐项显示
+    static const QMap<QString, QString> typeEmoji = {
+        {"985高校", "🎓"}, {"211高校", "🏫"}, {"景点", "🏯"}, {"公园", "🌳"},
+        {"医院", "🏥"}, {"商场", "🛍️"}, {"文化场所", "🎭"}, {"交通枢纽", "🚉"}
+    };
+
+    for (int i = 0; i < result.size(); ++i) {
+        const auto& c = result[i];
+
+        QWidget* row = new QWidget();
+        row->setStyleSheet(
+            "background: white; border-radius: 12px; padding: 8px 14px;"
+            "border: 1px solid #e2edf2;");
+        QHBoxLayout* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(0, 0, 0, 0);
+        rl->setSpacing(8);
+
+        // 排名
+        QString medal = (i == 0) ? "🥇" : (i == 1) ? "🥈" : (i == 2) ? "🥉"
+            : QString("#%1").arg(i + 1);
+        QLabel* rank = new QLabel(medal);
+        rank->setStyleSheet("font-size:14px; font-weight:700; background:transparent;");
+        rank->setMinimumWidth(32);
+        rl->addWidget(rank);
+
+        // emoji
+        QLabel* emoji = new QLabel(typeEmoji.value(c.type, "📍"));
+        emoji->setStyleSheet("font-size:16px; background:transparent;");
+        rl->addWidget(emoji);
+
+        // 名称 + 城市
+        QLabel* name = new QLabel(QString("%1  ·  %2").arg(c.name).arg(c.city));
+        name->setStyleSheet("font-weight:600; font-size:13px; color:#1e4a6b; background:transparent;");
+        rl->addWidget(name, 1);
+
+        // 热度
+        QLabel* heat = new QLabel(QString("🔥 %1").arg(c.heat, 0, 'f', 1));
+        heat->setStyleSheet("font-size:11px; color:#c2410c; background:transparent;");
+        rl->addWidget(heat);
+
+        // 评分
+        QLabel* rate = new QLabel(QString("⭐ %1").arg(c.rating, 0, 'f', 1));
+        rate->setStyleSheet("font-size:11px; color:#f59e0b; background:transparent;");
+        rl->addWidget(rate);
+
+        m_recResultLayout->addWidget(row);
+    }
 }
 
 // ============================================================
