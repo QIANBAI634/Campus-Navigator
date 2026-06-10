@@ -1698,69 +1698,60 @@ void MainWindow::showDiaryDetail(int index)
         QString ss;
         for (int k = 1; k <= 5; ++k) ss += QChar(0x2605);
         if (a > 0)
-            return QString("评分  %1  %2 分  (%3人评)")
+            return QString("评分: %1  %2 分  (%3人评)")
                 .arg(ss).arg(a, 0, 'f', 1).arg(e.ratingCount());
-        return QString("评分  %1  暂无  (点击下方星星打分)").arg(ss);
+        return QString("评分: %1  暂无").arg(ss);
     };
     avgLabel->setText(buildAvgText(item));
     sr->addWidget(avgLabel);
     sr->addStretch();
     cl->addLayout(sr);
 
-    // 5 颗可点击星星
+    // 5 颗可点击星星 — 只用 QChar(0x2605)，金/灰色区分
     QHBoxLayout* rr = new QHBoxLayout();
-    rr->setSpacing(8);
-    QLabel* rp = new QLabel("点击打分：");
-    rp->setStyleSheet("font-size:14px; color:#5e7a8c; font-weight:600;");
+    rr->setSpacing(6);
+    QLabel* rp = new QLabel("打分(点击后关闭):");
+    rp->setStyleSheet("font-size:12px; color:#5e7a8c; font-weight:600;");
     rr->addWidget(rp);
 
-    QVector<QPushButton*> sbtns;
     int di = index;
     QString dd = globalDir;
     int cr = item.getUserRating(curUid);
+    QDialog* dlg = dialog;  // 原始指针，只用来 close
+
+    auto makeStarStyle = [](bool filled) {
+        return QString(
+            "QPushButton { background:transparent;"
+            " border:2px solid %1; border-radius:6px;"
+            " font-size:26px; color:%1; min-width:40px; min-height:40px; }"
+            "QPushButton:hover { background:#fff8e0;"
+            " border-color:#f59e0b; color:#f59e0b; }"
+        ).arg(filled ? "#f59e0b" : "#d0d0d0");
+    };
 
     for (int star = 1; star <= 5; ++star) {
         QPushButton* sb = new QPushButton(QChar(0x2605));
-        sb->setFixedSize(48, 48);
         sb->setCursor(Qt::PointingHandCursor);
-        bool filled = cr > 0 && star <= cr;
-        sb->setStyleSheet(QString(
-            "QPushButton { background:transparent; border:2px solid %1;"
-            " border-radius:8px; font-size:28px; color:%1; }"
-            "QPushButton:hover { background:#fff8e0; border-color:#f59e0b;"
-            " color:#f59e0b; font-size:32px; }"
-        ).arg(filled ? "#f59e0b" : "#d0d0d0"));
+        sb->setStyleSheet(makeStarStyle(cr > 0 && star <= cr));
         sb->setToolTip(QString("%1 分").arg(star));
-        sbtns.append(sb);
 
-        // 唯一 connect — 保存+刷新全部放在 QTimer 里执行，避免 clicked 回调里操作 UI 崩溃
         int score = star;
-        connect(sb, &QPushButton::clicked, this,
-            [this, di, dd, curUid, score, avgLabel, sbtns, buildAvgText]() {
-                QTimer::singleShot(0, this,
-                    [di, dd, curUid, score, avgLabel, sbtns, buildAvgText]() {
-                        DiaryManager::setUserRating(dd, di, curUid, score);
-                        QVector<DiaryEntry> fresh = DiaryManager::loadPublished(dd);
-                        if (di >= fresh.size()) return;
-                        const DiaryEntry& e = fresh[di];
-                        avgLabel->setText(buildAvgText(e));
-                        int nr = e.getUserRating(curUid);
-                        for (int k = 0; k < 5; ++k) {
-                            bool f = nr > 0 && k < nr;
-                            sbtns[k]->setStyleSheet(QString(
-                                "QPushButton { background:transparent;"
-                                " border:2px solid %1; border-radius:8px;"
-                                " font-size:28px; color:%1; }"
-                                "QPushButton:hover { background:#fff8e0;"
-                                " border-color:#f59e0b; color:#f59e0b; font-size:32px; }"
-                            ).arg(f ? "#f59e0b" : "#d0d0d0"));
-                        }
-                    });
+        // ★ 唯一操作：存盘 + 关闭弹窗。绝不动 UI。
+        connect(sb, &QPushButton::clicked, dlg,
+            [dd, di, curUid, score]() {
+                DiaryManager::setUserRating(dd, di, curUid, score);
             });
+        connect(sb, &QPushButton::clicked, dlg, &QDialog::accept);
+
         rr->addWidget(sb);
     }
     rr->addStretch();
     cl->addLayout(rr);
+
+    // 提示
+    QLabel* tipLabel = new QLabel("评分后弹窗将自动关闭，重新打开即可看到更新");
+    tipLabel->setStyleSheet("font-size:11px; color:#7f9aaa; padding:4px 0;");
+    cl->addWidget(tipLabel);
 
     cl->addStretch();
     sa->setWidget(card);
