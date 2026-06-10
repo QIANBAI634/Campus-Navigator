@@ -62,6 +62,7 @@ private slots:
     void onDeleteDraft(int index);  // 删除草稿
     void onDeletePublished(int index); // 删除已发布日记
     void onViewTimeline(int activeIndex = 0); // 查看已发布日记时间线
+    void showDiaryDetail(int index);    // 单条日记详情（浏览+评分）
 
 private:
     // ========== UI 构建 ==========

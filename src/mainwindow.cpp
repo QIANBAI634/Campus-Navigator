@@ -48,6 +48,8 @@ MainWindow::MainWindow(QWidget *parent)
     populateSelectors();
     updateStats();
     updateWordCount();
+    refreshDraftList();
+    refreshPublishedList();   // 启动时加载已发布日记列表
 }
 
 MainWindow::~MainWindow() {}
@@ -1408,15 +1410,6 @@ void MainWindow::onViewTimeline(int activeIndex)
         return;
     }
 
-    // 首次打开时间线 → 所有日记热度 +1（评分刷新时传 -2，不重复加）
-    if (activeIndex >= 0) {
-        for (int i = 0; i < published.size(); ++i) {
-            DiaryManager::incrementViews(globalDir, i);
-        }
-        // 重新加载以获取更新后的 views
-        published = DiaryManager::loadPublished(globalDir);
-    }
-
     // 使用 QDialog 作为时间线查看器（替代 HTML 的覆盖层）
     QDialog* timelineDialog = new QDialog(this);
     timelineDialog->setWindowTitle("📰 已发布日记 - 朋友圈时间线");
@@ -1507,22 +1500,24 @@ void MainWindow::onViewTimeline(int activeIndex)
         double avg = item.avgRating();
         QLabel* ratingDisplay = new QLabel();
         ratingDisplay->setStyleSheet("font-size:12px; color:#f59e0b; font-weight:700;");
-        // 构建星级文字显示
-        QString starsStr;
-        int fullStars = static_cast<int>(avg);
-        bool halfStar = (avg - fullStars) >= 0.5;
-        for (int s = 1; s <= 5; ++s)
-            starsStr += (s <= fullStars) ? "★" : (halfStar && s == fullStars + 1) ? "☆" : "☆";
-        if (avg > 0)
-            ratingDisplay->setText(QString("⭐ %1  (%2分 · %3人评)")
-                .arg(starsStr).arg(avg, 0, 'f', 1).arg(item.ratingCount));
-        else
-            ratingDisplay->setText("⭐ 暂无评分");
+
+        auto updateRatingDisplay = [ratingDisplay](const DiaryEntry& e) {
+            double a = e.avgRating();
+            QString starStr;
+            for (int s = 1; s <= 5; ++s)
+                starStr += (s <= static_cast<int>(a)) ? "★" : "☆";
+            if (a > 0)
+                ratingDisplay->setText(QString("⭐ %1  (%2分 · %3人评)")
+                    .arg(starStr).arg(a, 0, 'f', 1).arg(e.ratingCount));
+            else
+                ratingDisplay->setText("⭐ 暂无评分");
+        };
+        updateRatingDisplay(item);
         statsRow->addWidget(ratingDisplay);
         statsRow->addStretch();
         cardLayout->addLayout(statsRow);
 
-        // 评分按钮行（点击打分）
+        // 评分星星行（交互式：点击实心填充左侧）
         QHBoxLayout* ratingBtnRow = new QHBoxLayout();
         ratingBtnRow->setSpacing(4);
         QLabel* ratePrompt = new QLabel("你的评分:");
@@ -1530,26 +1525,48 @@ void MainWindow::onViewTimeline(int activeIndex)
         ratingBtnRow->addWidget(ratePrompt);
 
         int cardIndex = i;
+        QVector<QPushButton*> starBtns;
         for (int s = 1; s <= 5; ++s) {
-            QPushButton* starBtn = new QPushButton("★");
-            starBtn->setFixedSize(28, 28);
+            QPushButton* starBtn = new QPushButton("☆");
+            starBtn->setFixedSize(30, 30);
             starBtn->setCursor(Qt::PointingHandCursor);
             starBtn->setStyleSheet(
                 "QPushButton { background: transparent; border: none;"
-                "font-size: 20px; color: #d4d4d4; }"
-                "QPushButton:hover { color: #f59e0b; font-size: 24px; }");
+                "font-size: 22px; color: #f59e0b; }"
+                "QPushButton:hover { font-size: 26px; }");
             starBtn->setToolTip(QString("评分 %1 分").arg(s));
+            starBtns.append(starBtn);
+
             connect(starBtn, &QPushButton::clicked, this,
-                [this, cardIndex, s, globalDir, timelineDialog]() {
+                [this, cardIndex, s, globalDir, ratingDisplay, starBtns, updateRatingDisplay]() {
                     if (DiaryManager::addRating(globalDir, cardIndex, s)) {
-                        // 关闭并刷新时间线，-2 表示跳过浏览计数
-                        timelineDialog->accept();
-                        onViewTimeline(-2);
+                        // 读取最新数据
+                        QVector<DiaryEntry> updated = DiaryManager::loadPublished(globalDir);
+                        if (cardIndex < updated.size()) {
+                            // 更新平均分显示
+                            updateRatingDisplay(updated[cardIndex]);
+                            // 更新星星状态：左填实心★，右留空心☆
+                            for (int j = 0; j < 5; ++j) {
+                                starBtns[j]->setText(j < s ? "★" : "☆");
+                            }
+                        }
                     }
                 });
             ratingBtnRow->addWidget(starBtn);
         }
         ratingBtnRow->addStretch();
+
+        // "查看详情" 按钮
+        QPushButton* detailBtn = new QPushButton("📖 查看详情");
+        detailBtn->setStyleSheet(
+            "QPushButton { background:#e9f2f5; border:none; border-radius:16px;"
+            "padding:6px 14px; font-size:11px; color:#1e4a6b; font-weight:600; }"
+            "QPushButton:hover { background:#d9e5f0; }");
+        detailBtn->setCursor(Qt::PointingHandCursor);
+        connect(detailBtn, &QPushButton::clicked, this,
+            [this, cardIndex]() { showDiaryDetail(cardIndex); });
+        ratingBtnRow->addWidget(detailBtn);
+
         cardLayout->addLayout(ratingBtnRow);
 
         // 内容
@@ -1607,6 +1624,171 @@ void MainWindow::onViewTimeline(int activeIndex)
 
     timelineDialog->exec();
     timelineDialog->deleteLater();
+}
+
+// ============================================================
+// 单条日记详情（浏览计数 + 交互式评分）
+// ============================================================
+
+void MainWindow::showDiaryDetail(int index)
+{
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
+    if (index < 0 || index >= published.size()) return;
+
+    // 📖 打开详情即浏览 → 该日记热度 +1
+    DiaryManager::incrementViews(globalDir, index);
+    published = DiaryManager::loadPublished(globalDir);
+    const DiaryEntry& item = published[index];
+
+    QDialog* dialog = new QDialog(this);
+    dialog->setWindowTitle(QString("📖 %1 的日记").arg(
+        item.userNickname.isEmpty() ? item.userId : item.userNickname));
+    dialog->resize(560, 650);
+    dialog->setStyleSheet("QDialog { background: #e9f0f5; }");
+
+    QVBoxLayout* dl = new QVBoxLayout(dialog);
+
+    // 顶部操作栏
+    QHBoxLayout* top = new QHBoxLayout();
+    QPushButton* backBtn = new QPushButton("← 返回列表");
+    backBtn->setStyleSheet(
+        "QPushButton { background: white; border-radius: 20px;"
+        "padding: 8px 20px; font-size: 13px; font-weight: 600;"
+        "color: #0f5b7a; border: none; }"
+        "QPushButton:hover { background: #f0f4f9; }");
+    connect(backBtn, &QPushButton::clicked, dialog, &QDialog::accept);
+    top->addWidget(backBtn);
+    top->addStretch();
+    dl->addLayout(top);
+
+    // 卡片主体
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+
+    QWidget* card = new QWidget();
+    card->setStyleSheet("background: white; border-radius: 20px; padding: 20px;");
+    QVBoxLayout* cl = new QVBoxLayout(card);
+    cl->setSpacing(14);
+
+    // 头部信息
+    QString authorStr = item.userNickname.isEmpty() ? item.userId : item.userNickname;
+    QLabel* header = new QLabel(
+        QString("👤 %1  ·  🏷️ %2\n🕐 %3  ·  👁 %4 次浏览")
+            .arg(authorStr, item.category,
+                 item.publishedAt.isEmpty() ? item.createdAt : item.publishedAt)
+            .arg(item.views));
+    header->setStyleSheet("font-size:12px; color:#7f9aaa; font-weight:500; line-height:1.8;");
+    cl->addWidget(header);
+
+    // 目的地信息
+    if (!item.trackPoints.isEmpty()) {
+        QJsonObject last = item.trackPoints.last();
+        QString addr = item.campusName.isEmpty() ? last["name"].toString()
+            : item.campusName + ", " + last["name"].toString();
+        QLabel* dest = new QLabel(QString("🏁 %1").arg(addr));
+        dest->setStyleSheet("font-size:12px; color:#1f6d49; font-weight:600;");
+        cl->addWidget(dest);
+    }
+
+    // 正文
+    QLabel* content = new QLabel(item.content.isEmpty() ? "（无内容）" : item.content);
+    content->setWordWrap(true);
+    content->setStyleSheet(
+        "font-size:14px; color:#1f2f38; line-height:1.8; white-space:pre-wrap;"
+        "padding:8px 0;");
+    cl->addWidget(content);
+
+    // 配图（可点击放大）
+    if (!item.photos.isEmpty()) {
+        QHBoxLayout* pl = new QHBoxLayout();
+        pl->setSpacing(8);
+        for (const auto& p : item.photos) {
+            QLabel* plb = new QLabel();
+            plb->setCursor(Qt::PointingHandCursor);
+            QPixmap pm(p.imageFilePath);
+            QString pp = p.imageFilePath;
+            if (!pm.isNull())
+                plb->setPixmap(pm.scaled(160, 160, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            else
+                plb->setText("🖼️");
+            plb->setStyleSheet("border:2px solid #e2edf2; border-radius:14px; padding:4px;");
+            plb->setToolTip("点击放大");
+            plb->installEventFilter(this);
+            plb->setProperty("photoPath", pp);
+            pl->addWidget(plb);
+        }
+        pl->addStretch();
+        cl->addLayout(pl);
+    }
+
+    // 平均评分
+    QHBoxLayout* sr = new QHBoxLayout();
+    double avg = item.avgRating();
+    QString starsStr;
+    for (int s = 1; s <= 5; ++s)
+        starsStr += (s <= static_cast<int>(avg)) ? "★" : "☆";
+    QLabel* avgLabel = new QLabel();
+    avgLabel->setStyleSheet("font-size:14px; color:#f59e0b; font-weight:700;");
+
+    auto refreshAvg = [avgLabel](const DiaryEntry& e) {
+        double a = e.avgRating();
+        QString ss;
+        for (int s = 1; s <= 5; ++s)
+            ss += (s <= static_cast<int>(a)) ? "★" : "☆";
+        if (a > 0)
+            avgLabel->setText(QString("⭐ %1  (%2分 · %3人评)")
+                .arg(ss).arg(a, 0, 'f', 1).arg(e.ratingCount));
+        else
+            avgLabel->setText("⭐ 暂无评分");
+    };
+    refreshAvg(item);
+    sr->addWidget(avgLabel);
+    sr->addStretch();
+    cl->addLayout(sr);
+
+    // 交互式评分星星
+    QHBoxLayout* rr = new QHBoxLayout();
+    rr->setSpacing(4);
+    QLabel* rp = new QLabel("你的评分:");
+    rp->setStyleSheet("font-size:13px; color:#7f9aaa; font-weight:600;");
+    rr->addWidget(rp);
+
+    QVector<QPushButton*> sbtns;
+    for (int s = 1; s <= 5; ++s) {
+        QPushButton* sb = new QPushButton("☆");
+        sb->setFixedSize(36, 36);
+        sb->setCursor(Qt::PointingHandCursor);
+        sb->setStyleSheet(
+            "QPushButton { background: transparent; border: none;"
+            "font-size: 26px; color: #f59e0b; }"
+            "QPushButton:hover { font-size: 30px; }");
+        sb->setToolTip(QString("评分 %1 分").arg(s));
+        sbtns.append(sb);
+
+        connect(sb, &QPushButton::clicked, this,
+            [this, index, s, globalDir, avgLabel, sbtns, refreshAvg]() {
+                if (DiaryManager::addRating(globalDir, index, s)) {
+                    QVector<DiaryEntry> updated = DiaryManager::loadPublished(globalDir);
+                    if (index < updated.size()) {
+                        refreshAvg(updated[index]);
+                        for (int j = 0; j < 5; ++j)
+                            sbtns[j]->setText(j < s ? "★" : "☆");
+                    }
+                }
+            });
+        rr->addWidget(sb);
+    }
+    rr->addStretch();
+    cl->addLayout(rr);
+
+    cl->addStretch();
+    sa->setWidget(card);
+    dl->addWidget(sa);
+
+    dialog->exec();
+    dialog->deleteLater();
 }
 
 // ============================================================
