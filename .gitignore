@@ -1,12 +1,29 @@
 # 编译产物
 build/
+build2/
+
+# CMake 生成文件
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
 
 # Qt 自动生成
 *.pro.user
 moc_*
 ui_*
 qrc_*
+*_autogen/
 
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 平台无关
+__pycache__/

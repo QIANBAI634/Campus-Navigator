@@ -15,20 +15,20 @@ else()
 endif()
 
 add_executable(CampusNavigator
-    main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    graph.h
-    navigationdata.cpp
-    navigationdata.h
-    diarymanager.cpp
-    diarymanager.h
-    mapwidget.cpp
-    mapwidget.h
-    campusdatabase.cpp
-    campusdatabase.h
-    usermanager.cpp
-    usermanager.h
+    src/main.cpp
+    src/mainwindow.cpp
+    src/mainwindow.h
+    src/graph.h
+    src/navigationdata.cpp
+    src/navigationdata.h
+    src/diarymanager.cpp
+    src/diarymanager.h
+    src/mapwidget.cpp
+    src/mapwidget.h
+    src/campusdatabase.cpp
+    src/campusdatabase.h
+    src/usermanager.cpp
+    src/usermanager.h
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)

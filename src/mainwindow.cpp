@@ -453,9 +453,9 @@ QWidget* MainWindow::createNavigationPanel()
     m_mapWidget->setGraph(&m_graph);
     // 依次尝试多个路径加载地图图片
     QStringList mapPaths = {
-        QApplication::applicationDirPath() + "/北邮校园地图.jpg",
-        QApplication::applicationDirPath() + "/../北邮校园地图.jpg",
-        "C:/Users/37915/Desktop/CampusNav/北邮校园地图.jpg"
+        QApplication::applicationDirPath() + "/assets/北邮校园地图.jpg",
+        QApplication::applicationDirPath() + "/../assets/北邮校园地图.jpg",
+        QApplication::applicationDirPath() + "/../../assets/北邮校园地图.jpg",
     };
     for (const QString& path : mapPaths) {
         if (m_mapWidget->loadMap(path)) break;
