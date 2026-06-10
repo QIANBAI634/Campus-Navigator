@@ -1687,30 +1687,27 @@ void MainWindow::showDiaryDetail(int index)
     // 获取当前用户ID
     QString curUid = m_userManager.currentUserId();
 
-    // 平均评分
+    // ---- 评分区域 ----
+    // 平均分显示
     QHBoxLayout* sr = new QHBoxLayout();
     QLabel* avgLabel = new QLabel();
     avgLabel->setStyleSheet("font-size:16px; color:#c4860b; font-weight:700;");
 
-    // 构建评分文字 — 全部用 U+2605，颜色在 stylesheet 中区分
     auto buildAvgText = [](const DiaryEntry& e) -> QString {
         double a = e.avgRating();
         QString ss;
-        for (int k = 1; k <= 5; ++k)
-            ss += QChar(0x2605);  // 一律 ★
+        for (int k = 1; k <= 5; ++k) ss += QChar(0x2605);
         if (a > 0)
             return QString("评分  %1  %2 分  (%3人评)")
                 .arg(ss).arg(a, 0, 'f', 1).arg(e.ratingCount());
-        else
-            return QString("评分  %1  暂无  (点击下方星星打分)")
-                .arg(ss);
+        return QString("评分  %1  暂无  (点击下方星星打分)").arg(ss);
     };
     avgLabel->setText(buildAvgText(item));
     sr->addWidget(avgLabel);
     sr->addStretch();
     cl->addLayout(sr);
 
-    // 交互式评分星星 — 只用 U+2605(★)，颜色区分空/实
+    // 5 颗可点击星星
     QHBoxLayout* rr = new QHBoxLayout();
     rr->setSpacing(8);
     QLabel* rp = new QLabel("点击打分：");
@@ -1718,68 +1715,47 @@ void MainWindow::showDiaryDetail(int index)
     rr->addWidget(rp);
 
     QVector<QPushButton*> sbtns;
-    int itemIndex = index;
-    QString dataDir = globalDir;
-    int curRating = item.getUserRating(curUid);  // 当前用户已评分值
+    int di = index;
+    QString dd = globalDir;
+    int cr = item.getUserRating(curUid);
 
     for (int star = 1; star <= 5; ++star) {
-        QPushButton* sb = new QPushButton(QChar(0x2605));  // 一律 ★
+        QPushButton* sb = new QPushButton(QChar(0x2605));
         sb->setFixedSize(48, 48);
         sb->setCursor(Qt::PointingHandCursor);
-
-        // 当前用户已评分：左填金色；未评分：全灰
-        bool filled = curRating > 0 && star <= curRating;
-        QString starColor = filled ? "#f59e0b" : "#d0d0d0";
+        bool filled = cr > 0 && star <= cr;
         sb->setStyleSheet(QString(
-            "QPushButton {"
-            "  background: transparent;"
-            "  border: 2px solid %1;"
-            "  border-radius: 8px;"
-            "  font-size: 28px;"
-            "  color: %1;"
-            "}"
-            "QPushButton:hover {"
-            "  background: #fff8e0;"
-            "  border-color: #f59e0b;"
-            "  color: #f59e0b;"
-            "  font-size: 32px;"
-            "}").arg(starColor));
+            "QPushButton { background:transparent; border:2px solid %1;"
+            " border-radius:8px; font-size:28px; color:%1; }"
+            "QPushButton:hover { background:#fff8e0; border-color:#f59e0b;"
+            " color:#f59e0b; font-size:32px; }"
+        ).arg(filled ? "#f59e0b" : "#d0d0d0"));
         sb->setToolTip(QString("%1 分").arg(star));
         sbtns.append(sb);
 
+        // 唯一 connect — 保存+刷新全部放在 QTimer 里执行，避免 clicked 回调里操作 UI 崩溃
         int score = star;
         connect(sb, &QPushButton::clicked, this,
-            [this, itemIndex, score, dataDir, avgLabel, sbtns, buildAvgText, curUid]() {
-                // 1. 保存评分（同一用户后评覆盖前评）
-                if (!DiaryManager::setUserRating(dataDir, itemIndex, curUid, score)) return;
-
-                // 2. 重载数据
-                QVector<DiaryEntry> fresh = DiaryManager::loadPublished(dataDir);
-                if (itemIndex >= fresh.size()) return;
-                const DiaryEntry& entry = fresh[itemIndex];
-
-                // 3. 刷新平均分标签
-                avgLabel->setText(buildAvgText(entry));
-
-                // 4. 刷新星星颜色 — 左填金，右留灰
-                for (int k = 0; k < 5; ++k) {
-                    bool f = (k < score);
-                    QString c = f ? "#f59e0b" : "#d0d0d0";
-                    sbtns[k]->setStyleSheet(QString(
-                        "QPushButton {"
-                        "  background: transparent;"
-                        "  border: 2px solid %1;"
-                        "  border-radius: 8px;"
-                        "  font-size: 28px;"
-                        "  color: %1;"
-                        "}"
-                        "QPushButton:hover {"
-                        "  background: #fff8e0;"
-                        "  border-color: #f59e0b;"
-                        "  color: #f59e0b;"
-                        "  font-size: 32px;"
-                        "}").arg(c));
-                }
+            [this, di, dd, curUid, score, avgLabel, sbtns, buildAvgText]() {
+                QTimer::singleShot(0, this,
+                    [di, dd, curUid, score, avgLabel, sbtns, buildAvgText]() {
+                        DiaryManager::setUserRating(dd, di, curUid, score);
+                        QVector<DiaryEntry> fresh = DiaryManager::loadPublished(dd);
+                        if (di >= fresh.size()) return;
+                        const DiaryEntry& e = fresh[di];
+                        avgLabel->setText(buildAvgText(e));
+                        int nr = e.getUserRating(curUid);
+                        for (int k = 0; k < 5; ++k) {
+                            bool f = nr > 0 && k < nr;
+                            sbtns[k]->setStyleSheet(QString(
+                                "QPushButton { background:transparent;"
+                                " border:2px solid %1; border-radius:8px;"
+                                " font-size:28px; color:%1; }"
+                                "QPushButton:hover { background:#fff8e0;"
+                                " border-color:#f59e0b; color:#f59e0b; font-size:32px; }"
+                            ).arg(f ? "#f59e0b" : "#d0d0d0"));
+                        }
+                    });
             });
         rr->addWidget(sb);
     }
