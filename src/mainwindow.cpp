@@ -702,14 +702,15 @@ QWidget* MainWindow::createRecommendPanel()
 
     row1->addStretch();
 
-    // 推荐 Top-10 按钮
-    m_recBtn = new QPushButton("🏆 Top-10 推荐");
-    m_recBtn->setStyleSheet(
-        "QPushButton {"
-        "  background: #1f6d49; color: white; border: none;"
-        "  border-radius: 24px; padding: 10px 20px;"
-        "  font-size: 14px; font-weight: 600; }"
-        "QPushButton:hover { background: #0e5437; }");
+	    // 推荐 Top-10 按钮
+	    m_recBtn = new QPushButton("🏆 Top-10 榜");
+	    m_recBtn->setMinimumWidth(140);
+	    m_recBtn->setStyleSheet(
+	        "QPushButton {"
+	        "  background: #1f6d49; color: white; border: none;"
+	        "  border-radius: 20px; padding: 10px 16px;"
+	        "  font-size: 13px; font-weight: 600; }"
+	        "QPushButton:hover { background: #0e5437; }");
     m_recBtn->setCursor(Qt::PointingHandCursor);
     connect(m_recBtn, &QPushButton::clicked, this, &MainWindow::onRecommendTop);
     row1->addWidget(m_recBtn);
@@ -814,7 +815,7 @@ void MainWindow::onSearchCampus()
         QString("🏆 Top-%1 · 按%2 · %3%4")
             .arg(result.size()).arg(modeStr).arg(typeStr).arg(kwStr));
 
-    // 逐项显示
+    // 逐项显示 — 用单行 HTML 富文本确保完美对齐
     static const QMap<QString, QString> typeEmoji = {
         {"985高校", "🎓"}, {"211高校", "🏫"}, {"景点", "🏯"}, {"公园", "🌳"},
         {"医院", "🏥"}, {"商场", "🛍️"}, {"文化场所", "🎭"}, {"交通枢纽", "🚉"}
@@ -822,44 +823,32 @@ void MainWindow::onSearchCampus()
 
     for (int i = 0; i < result.size(); ++i) {
         const auto& c = result[i];
-
-        QWidget* row = new QWidget();
-        row->setStyleSheet(
-            "background: white; border-radius: 12px; padding: 8px 14px;"
-            "border: 1px solid #e2edf2;");
-        QHBoxLayout* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 0, 0, 0);
-        rl->setSpacing(8);
-
-        // 排名
         QString medal = (i == 0) ? "🥇" : (i == 1) ? "🥈" : (i == 2) ? "🥉"
-            : QString("#%1").arg(i + 1);
-        QLabel* rank = new QLabel(medal);
-        rank->setStyleSheet("font-size:14px; font-weight:700; background:transparent;");
-        rank->setMinimumWidth(32);
-        rl->addWidget(rank);
+            : QString("%1 ").arg(i + 1, 2);  // 右对齐占2位
 
-        // emoji
-        QLabel* emoji = new QLabel(typeEmoji.value(c.type, "📍"));
-        emoji->setStyleSheet("font-size:16px; background:transparent;");
-        rl->addWidget(emoji);
+        // 单行 HTML：排名 | emoji 名称 · 城市 | 🔥热度 | ⭐评分
+        QString html = QString(
+            "<table width='100%' cellspacing='0' cellpadding='4'"
+            " style='font-size:13px; color:#1f2f38;'>"
+            "<tr>"
+            "<td width='32' align='center' style='font-weight:700;'>%1</td>"
+            "<td width='28' align='center'>%2</td>"
+            "<td align='left' style='font-weight:600; color:#1e4a6b;'>%3 · %4 · %5</td>"
+            "<td width='52' align='right' style='color:#c2410c;'>🔥%6</td>"
+            "<td width='52' align='right' style='color:#f59e0b;'>⭐%7</td>"
+            "</tr></table>"
+        ).arg(medal, typeEmoji.value(c.type, "📍"),
+              c.name, c.city, c.type,
+              QString::number(c.heat, 'f', 1),
+              QString::number(c.rating, 'f', 1));
 
-        // 名称 + 城市
-        QLabel* name = new QLabel(QString("%1  ·  %2").arg(c.name).arg(c.city));
-        name->setStyleSheet("font-weight:600; font-size:13px; color:#1e4a6b; background:transparent;");
-        rl->addWidget(name, 1);
-
-        // 热度
-        QLabel* heat = new QLabel(QString("🔥 %1").arg(c.heat, 0, 'f', 1));
-        heat->setStyleSheet("font-size:11px; color:#c2410c; background:transparent;");
-        rl->addWidget(heat);
-
-        // 评分
-        QLabel* rate = new QLabel(QString("⭐ %1").arg(c.rating, 0, 'f', 1));
-        rate->setStyleSheet("font-size:11px; color:#f59e0b; background:transparent;");
-        rl->addWidget(rate);
-
-        m_recResultLayout->addWidget(row);
+        QLabel* rowLabel = new QLabel(html);
+        rowLabel->setTextFormat(Qt::RichText);
+        rowLabel->setWordWrap(false);
+        rowLabel->setStyleSheet(
+            "QLabel { background: white; border: 1px solid #e2edf2;"
+            " border-radius: 10px; padding: 4px 10px; }");
+        m_recResultLayout->addWidget(rowLabel);
     }
 }
 
