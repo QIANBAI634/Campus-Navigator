@@ -2590,27 +2590,74 @@ void MainWindow::onSearchDiaryTitle()
         delete child;
     }
 
-    QString title = m_diarySearchTitleInput->text().trimmed();
-    if (title.isEmpty()) {
-        m_diarySearchResultLabel->setText("❌ 请输入日记标题");
+    QString prefix = m_diarySearchTitleInput->text().trimmed();
+    if (prefix.isEmpty()) {
+        m_diarySearchResultLabel->setText("❌ 请输入搜索内容");
         return;
     }
 
     QString globalDir = QApplication::applicationDirPath() + "/data";
     QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
-    int idx = DiaryManager::findDiaryByTitle(published, title);
+    bool byHeat = m_diaryRecBtn->text().contains("热度");
+    auto matches = DiaryManager::searchByPrefix(published, prefix, byHeat);
 
-    if (idx < 0) {
+    if (matches.isEmpty()) {
         m_diarySearchResultLabel->setText(
-            QString("📭 未找到标题为「%1」的日记").arg(title));
+            QString("📭 未找到以「%1」开头的日记").arg(prefix));
         return;
     }
 
-    // 找到 → 显示 + 浏览+1
+    // 独一条 → 直接弹详情
+    if (matches.size() == 1) {
+        int idx = -1;
+        for (int p = 0; p < published.size(); ++p) {
+            if (published[p].id == matches[0].id) { idx = p; break; }
+        }
+        if (idx >= 0) {
+            m_diarySearchResultLabel->setText(
+                QString("✅ 找到 1 条匹配，已自动打开"));
+            showDiaryDetail(idx);
+            return;
+        }
+    }
+
+    // 多条 → 在结果区列表展示
     m_diarySearchResultLabel->setText(
-        QString("✅ 找到匹配日记 (QHash O(1)查找)"));
-    // 直接打开详情（浏览+1，可评分）
-    showDiaryDetail(idx);
+        QString("🔍 找到 %1 条以「%2」开头的日记 (按%3排序)")
+            .arg(matches.size()).arg(prefix)
+            .arg(byHeat ? "热度" : "评分"));
+
+    for (int i = 0; i < matches.size(); ++i) {
+        int origIdx = -1;
+        for (int p = 0; p < published.size(); ++p) {
+            if (published[p].id == matches[i].id) { origIdx = p; break; }
+        }
+        QString ttl = matches[i].preview();
+        QString html = QString(
+            "<table width='100%' cellspacing='0' cellpadding='3'>"
+            "<tr>"
+            "<td width='26' align='center'>%1</td>"
+            "<td align='left' style='color:#1e4a6b;'>%2</td>"
+            "<td width='50' align='right' style='color:#c2410c;'>👁%3</td>"
+            "<td width='50' align='right' style='color:#f59e0b;'>⭐%4</td>"
+            "</tr></table>"
+        ).arg(i+1).arg(ttl.toHtmlEscaped())
+         .arg(matches[i].views)
+         .arg(matches[i].avgRating(), 0, 'f', 1);
+
+        QLabel* label = new QLabel(html);
+        label->setTextFormat(Qt::RichText);
+        label->setCursor(Qt::PointingHandCursor);
+        label->setStyleSheet(
+            "QLabel { background:white; border:1px solid #e2edf2;"
+            " border-radius:10px; padding:4px 10px; }"
+            "QLabel:hover { background:#e9f2f5; border-color:#1f6d49; }");
+        label->setToolTip("点击查看详情");
+        label->installEventFilter(this);
+        label->setProperty("diaryIndex", origIdx);
+        label->setProperty("isDiaryLink", true);
+        m_diarySearchResultLayout->addWidget(label);
+    }
 }
 
 // ============================================================

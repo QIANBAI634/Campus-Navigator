@@ -264,9 +264,10 @@ public:
                                                     const QString& keyword,
                                                     bool byHeat);
 
-    // 按标题精确查找（基于 QHash，O(1) 均摊）
-    static int findDiaryByTitle(const QVector<DiaryEntry>& src,
-                                const QString& title);
+    // 按标题精确查找 — 返回所有匹配（按热度或评分排序）
+    static QVector<DiaryEntry> searchByPrefix(const QVector<DiaryEntry>& src,
+                                              const QString& prefix,
+                                              bool byHeat);
 
     // ========== 图片管理 ==========
     QString copyPhotoToStorage(const QString& sourcePath);

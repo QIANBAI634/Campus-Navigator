@@ -243,15 +243,22 @@ QVector<DiaryEntry> DiaryManager::searchByDestination(
     return matched;
 }
 
-int DiaryManager::findDiaryByTitle(const QVector<DiaryEntry>& src,
-                                     const QString& title)
+QVector<DiaryEntry> DiaryManager::searchByPrefix(
+    const QVector<DiaryEntry>& src, const QString& prefix, bool byHeat)
 {
-    // 精确匹配内容前缀（O(n)，数据量小时足够高效）
-    QString q = title.trimmed();
-    for (int i = 0; i < src.size(); ++i)
-        if (src[i].content.trimmed().startsWith(q))
-            return i;
-    return -1;
+    QVector<DiaryEntry> matched;
+    QString q = prefix.trimmed();
+    for (const auto& d : src) {
+        if (d.content.trimmed().startsWith(q))
+            matched.append(d);
+    }
+    // 按热度/评分降序
+    std::sort(matched.begin(), matched.end(),
+        [byHeat](const DiaryEntry& a, const DiaryEntry& b) {
+            if (byHeat) return a.views > b.views;
+            return a.avgRating() > b.avgRating();
+        });
+    return matched;
 }
 
 // ========== 图片管理 ==========
