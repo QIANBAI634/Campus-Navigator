@@ -192,174 +192,268 @@ void MainWindow::applyGlobalStylesheet()
 
 void MainWindow::setupUI()
 {
-    // 滚动内容容器（模拟 HTML 中的白色卡片）
-    m_scrollContent = new QWidget();
-    m_scrollContent->setObjectName("scrollContent");
-    m_scrollContent->setFixedWidth(690);
-    m_scrollContent->setStyleSheet(
-        "#scrollContent {"
-        "  background: rgba(255,255,255,0.96);"
-        "  border-radius: 40px;"
-        "}"
-    );
-
-    QVBoxLayout* mainLayout = new QVBoxLayout(m_scrollContent);
+    // 中央容器
+    QWidget* central = new QWidget(this);
+    central->setStyleSheet("background: #d9e2ec;");
+    QVBoxLayout* mainLayout = new QVBoxLayout(central);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    // 添加各面板
-    mainLayout->addWidget(createHeaderPanel());
-    mainLayout->addWidget(createNavigationPanel());
-    mainLayout->addWidget(createRecommendPanel());        // 旅游推荐 Top-10
-    mainLayout->addWidget(createNearbyFacilityPanel());  // 附近设施查询
+    // 顶栏
+    mainLayout->addWidget(createTopBar());
 
-    // 分隔线
-    QFrame* sep = new QFrame();
-    sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("background:#cbdde6; max-height:1px; margin: 12px 28px;");
-    mainLayout->addWidget(sep);
+    // QStackedWidget — 4 个页面
+    m_stack = new QStackedWidget();
+    m_stack->setStyleSheet("QStackedWidget { background: transparent; }");
+    m_stack->addWidget(createPageNavigation());  // index 0
+    m_stack->addWidget(createPageRecommend());    // index 1
+    m_stack->addWidget(createPageSearch());       // index 2
+    m_stack->addWidget(createPageDiary());        // index 3
+    mainLayout->addWidget(m_stack, 1);  // stretch=1 填满剩余空间
 
-    mainLayout->addWidget(createDiaryPanel());
-    mainLayout->addWidget(createDraftListPanel());
-    mainLayout->addWidget(createPublishedPanel());
+    // 底部标签栏
+    mainLayout->addWidget(createBottomBar());
 
-    mainLayout->addSpacing(20);
+    setCentralWidget(central);
 
-    // 底部提示
-    QLabel* footer = new QLabel(
-        "⚡ 基于真实校园路网 | 路口节点已隐藏 | Dijkstra 最短路径算法");
-    footer->setAlignment(Qt::AlignCenter);
-    footer->setStyleSheet(
-        "font-size:11px; color:#5e7a8c; padding:8px 0 24px 0;");
-    mainLayout->addWidget(footer);
-
-    // 滚动区域包裹内容
-    m_scrollArea = new QScrollArea();
-    m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_scrollArea->setFrameShape(QFrame::NoFrame);
-    m_scrollArea->setWidget(m_scrollContent);
-    m_scrollArea->setFixedWidth(720);  // 690 + 预留滚动条宽度
-
-    // 外层居中容器：横向居中，纵向铺满
-    QWidget* centerContainer = new QWidget(this);
-    centerContainer->setStyleSheet("background: transparent;");
-    QVBoxLayout* outerVLayout = new QVBoxLayout(centerContainer);
-    outerVLayout->setContentsMargins(0, 0, 0, 0);
-    QHBoxLayout* centerHLayout = new QHBoxLayout();
-    centerHLayout->addStretch();
-    centerHLayout->addWidget(m_scrollArea);
-    centerHLayout->addStretch();
-    outerVLayout->addLayout(centerHLayout);
-    setCentralWidget(centerContainer);
+    // 默认选中导航
+    switchTab(0);
 }
 
 // ============================================================
-// 头部面板
+// 顶栏（精简版）
 // ============================================================
 
-QWidget* MainWindow::createHeaderPanel()
+QWidget* MainWindow::createTopBar()
 {
-    QWidget* header = new QWidget();
-    header->setStyleSheet(
-        "background: #0a2b3e;"
-        "border-top-left-radius: 40px;"
-        "border-top-right-radius: 40px;"
-        "padding: 20px 24px;"
-    );
+    QWidget* bar = new QWidget();
+    bar->setFixedHeight(52);
+    bar->setStyleSheet(
+        "background: #0a2b3e;");
 
-    QVBoxLayout* layout = new QVBoxLayout(header);
-    layout->setAlignment(Qt::AlignCenter);
-    layout->setSpacing(8);
+    QHBoxLayout* layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(16, 4, 16, 4);
+    layout->setSpacing(10);
 
-    QLabel* title = new QLabel("📍 校园导航系统");
-    title->setObjectName("heroTitle");
-    title->setAlignment(Qt::AlignCenter);
+    // 标题
+    QLabel* title = new QLabel("📍 校园导航");
+    title->setStyleSheet(
+        "font-size:15px; font-weight:700; color: white; background:transparent;");
     layout->addWidget(title);
 
-    QLabel* subtitle = new QLabel("基于 Dijkstra 的最短路径规划 | 200+ 景区/校园");
-    subtitle->setObjectName("heroSubtitle");
-    subtitle->setAlignment(Qt::AlignCenter);
-    layout->addWidget(subtitle);
+    layout->addStretch();
 
-    // ---- 景区选择 + 用户切换 行 ----
-    QHBoxLayout* topRow = new QHBoxLayout();
-    topRow->setSpacing(12);
-
-    // 景区/校园选择器
-    QLabel* campusLabel = new QLabel("🏛️ 目的地");
-    campusLabel->setStyleSheet(
-        "color: rgba(255,255,255,0.9); font-size: 12px; font-weight: 600;");
-    topRow->addWidget(campusLabel);
+    // 景区选择
+    QLabel* campusLabel = new QLabel("🏛️");
+    campusLabel->setStyleSheet("color: rgba(255,255,255,0.8); font-size:13px;");
+    layout->addWidget(campusLabel);
 
     m_campusSelect = new QComboBox();
-    m_campusSelect->setMinimumWidth(180);
+    m_campusSelect->setMinimumWidth(160);
     m_campusSelect->setStyleSheet(
         "QComboBox { background: white; border-radius: 12px;"
-        "padding: 6px 12px; font-size: 12px; color: #1f2f38; }"
+        "padding: 4px 10px; font-size: 11px; color: #1f2f38; }"
         "QComboBox:hover { background: #f0f4f9; }"
         "QComboBox QAbstractItemView {"
-        "  background: white; color: #1f2f38;"
-        "  selection-background-color: #e9f2f5; selection-color: #0a2b3e;"
-        "  max-height: 300px; }"
-        "QComboBox QAbstractItemView QScrollBar:vertical {"
-        "  background: #f0f4f9; width: 8px; border-radius: 4px; }"
-        "QComboBox QAbstractItemView QScrollBar::handle:vertical {"
-        "  background: #cbdde6; border-radius: 4px; min-height: 20px; }");
-    // 填充200个景区
+        "  background: white; color: #1f2f38; max-height: 300px;"
+        "  selection-background-color: #e9f2f5; selection-color: #0a2b3e; }");
     const auto& campuses = getAllCampuses();
-    for (int i = 0; i < campuses.size(); ++i) {
-        QString display = QString("%1  ★%2  %3")
-            .arg(campuses[i].name)
-            .arg(campuses[i].heat, 0, 'f', 1)
-            .arg(campuses[i].city);
-        m_campusSelect->addItem(display, i);
-    }
+    for (int i = 0; i < campuses.size(); ++i)
+        m_campusSelect->addItem(campuses[i].name, i);
     connect(m_campusSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onCampusChanged);
-    topRow->addWidget(m_campusSelect, 1);
+    layout->addWidget(m_campusSelect, 1);
 
     // 用户切换
     QLabel* userLabel = new QLabel("👤");
-    userLabel->setStyleSheet("color: rgba(255,255,255,0.9); font-size: 12px;");
-    topRow->addWidget(userLabel);
+    userLabel->setStyleSheet("color: rgba(255,255,255,0.8); font-size:13px;");
+    layout->addWidget(userLabel);
 
     m_userSelect = new QComboBox();
-    m_userSelect->setMaximumWidth(130);
+    m_userSelect->setMaximumWidth(110);
     m_userSelect->setStyleSheet(
         "QComboBox { background: white; border-radius: 12px;"
-        "padding: 6px 10px; font-size: 12px; color: #1f2f38; }"
+        "padding: 4px 8px; font-size: 11px; color: #1f2f38; }"
         "QComboBox:hover { background: #f0f4f9; }"
         "QComboBox QAbstractItemView {"
         "  background: white; color: #1f2f38;"
         "  selection-background-color: #e9f2f5; selection-color: #0a2b3e; }");
-    for (const auto& u : m_userManager.allUsers()) {
+    for (const auto& u : m_userManager.allUsers())
         m_userSelect->addItem(u.avatar + " " + u.nickname, u.userId);
-    }
     connect(m_userSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onUserChanged);
-    topRow->addWidget(m_userSelect);
+    layout->addWidget(m_userSelect);
 
-    layout->addLayout(topRow);
-
-    // 统计信息
-    m_statsLabel = new QLabel();
-    m_statsLabel->setAlignment(Qt::AlignCenter);
-    m_statsLabel->setStyleSheet(
-        "color: rgba(255,255,255,0.9);"
-        "font-size: 11px;"
-        "font-weight: 600;"
-        "background: rgba(255,255,255,0.15);"
-        "border-radius: 20px;"
-        "padding: 4px 16px;"
-        "margin-top: 8px;"
-    );
-    layout->addWidget(m_statsLabel, 0, Qt::AlignCenter);
-
-    return header;
+    return bar;
 }
 
+// ============================================================
+// 底部标签栏
+// ============================================================
+
+QWidget* MainWindow::createBottomBar()
+{
+    QWidget* bar = new QWidget();
+    bar->setFixedHeight(60);
+    bar->setStyleSheet("background: white; border-top: 1px solid #e0e0e0;");
+
+    QHBoxLayout* layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    struct TabDef { QString icon; QString text; QPushButton*& btn; };
+    TabDef tabs[] = {
+        {"🧭", "导航",   m_tabNav},
+        {"🎯", "推荐",   m_tabRec},
+        {"🔍", "查询",   m_tabSearch},
+        {"📝", "日记",   m_tabDiary},
+    };
+
+    for (int i = 0; i < 4; ++i) {
+        QPushButton* btn = new QPushButton(
+            QString("%1\n%2").arg(tabs[i].icon).arg(tabs[i].text));
+        btn->setCheckable(true);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet(
+            "QPushButton {"
+            "  background: white; border: none; border-top: 3px solid transparent;"
+            "  font-size: 10px; color: #999; padding: 6px 0 4px 0;"
+            "}"
+            "QPushButton:hover { color: #1f6d49; }"
+            "QPushButton:checked {"
+            "  color: #1f6d49; font-weight: 700;"
+            "  border-top: 3px solid #1f6d49;"
+            "}");
+        tabs[i].btn = btn;
+
+        int idx = i;
+        connect(btn, &QPushButton::clicked, this, [this, idx]() {
+            switchTab(idx);
+        });
+
+        layout->addWidget(btn);
+    }
+
+    return bar;
+}
+
+// ============================================================
+// 4个页面（各自包裹在 QScrollArea 中）
+// ============================================================
+
+QWidget* MainWindow::createPageNavigation()
+{
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { background: #f0f4f9; width: 8px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical { background: #cbdde6; border-radius: 4px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }");
+
+    QWidget* page = new QWidget();
+    page->setStyleSheet("background: #d9e2ec;");
+    QVBoxLayout* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(16, 8, 16, 8);
+    layout->addWidget(createNavigationPanel());
+    layout->addStretch();
+
+    sa->setWidget(page);
+    return sa;
+}
+
+QWidget* MainWindow::createPageRecommend()
+{
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { background: #f0f4f9; width: 8px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical { background: #cbdde6; border-radius: 4px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }");
+
+    QWidget* page = new QWidget();
+    page->setStyleSheet("background: #d9e2ec;");
+    QVBoxLayout* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(16, 8, 16, 8);
+    layout->addWidget(createRecommendPanel());
+    layout->addStretch();
+
+    sa->setWidget(page);
+    return sa;
+}
+
+QWidget* MainWindow::createPageSearch()
+{
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { background: #f0f4f9; width: 8px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical { background: #cbdde6; border-radius: 4px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }");
+
+    QWidget* page = new QWidget();
+    page->setStyleSheet("background: #d9e2ec;");
+    QVBoxLayout* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(16, 8, 16, 8);
+    layout->addWidget(createNearbyFacilityPanel());
+    layout->addStretch();
+
+    sa->setWidget(page);
+    return sa;
+}
+
+QWidget* MainWindow::createPageDiary()
+{
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { background: #f0f4f9; width: 8px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical { background: #cbdde6; border-radius: 4px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }");
+
+    QWidget* page = new QWidget();
+    page->setStyleSheet("background: #d9e2ec;");
+    QVBoxLayout* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(16, 8, 16, 8);
+    layout->addWidget(createDiaryPanel());
+    layout->addWidget(createDraftListPanel());
+    layout->addWidget(createPublishedPanel());
+    layout->addStretch();
+
+    sa->setWidget(page);
+    return sa;
+}
+
+// ============================================================
+// 标签切换
+// ============================================================
+
+void MainWindow::switchTab(int index)
+{
+    m_stack->setCurrentIndex(index);
+    updateTabStyle(index);
+}
+
+void MainWindow::updateTabStyle(int active)
+{
+    QPushButton* btns[] = {m_tabNav, m_tabRec, m_tabSearch, m_tabDiary};
+    for (int i = 0; i < 4; ++i) {
+        btns[i]->setChecked(i == active);
+    }
+}
+
+// ============================================================
 // ============================================================
 // 导航面板
 // ============================================================

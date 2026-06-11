@@ -1,7 +1,6 @@
 /**
- * 主窗口
- * 包含导航界面和旅行日记面板
- * 布局匹配原 HTML 版本的设计风格
+ * 主窗口 — 四标签页底部导航布局
+ * 类似微信UI: 导航 | 推荐 | 查询 | 日记
  */
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
@@ -12,6 +11,7 @@
 #include <QLabel>
 #include <QTextEdit>
 #include <QScrollArea>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -41,92 +41,110 @@ public:
     ~MainWindow();
 
 protected:
-    // 事件过滤器：处理朋友圈图片点击放大
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
+    // ========== 标签切换 ==========
+    void switchTab(int index);
+
     // ========== 导航相关 ==========
-    void onPlanRoute();             // 规划路线按钮
-    void onFinishNavigation();      // 完成导航按钮
-    void onCampusChanged(int index); // 切换景区/校园
-    void onUserChanged(int index);   // 切换用户
-    void onPlanMultiStop();         // 途经多点规划
-    void onAddStop();               // 添加途经点
-    void onClearStops();            // 清空途经点
+    void onPlanRoute();
+    void onFinishNavigation();
+    void onCampusChanged(int index);
+    void onUserChanged(int index);
+    void onPlanMultiStop();
+    void onAddStop();
+    void onClearStops();
 
     // ========== 场所查询 ==========
-    void onQueryNearbyFacilities();  // 查询附近设施
+    void onQueryNearbyFacilities();
 
     // ========== 旅游推荐 ==========
-    void onRecommendTop();           // 推荐 Top-10 景区
-    void onSearchCampus();           // 搜索景区
+    void onRecommendTop();
+    void onSearchCampus();
 
     // ========== 日记相关 ==========
-    void onCategoryChanged();       // 分类按钮切换
-    void onTextChanged();           // 日记文本变化（字数统计）
-    void onSaveDraft();             // 保存草稿
-    void onAttachPhoto();           // 添加配图
-    void onLoadDraft(int index);    // 加载草稿
-    void onPublishDraft(int index); // 发布草稿
-    void onDeleteDraft(int index);  // 删除草稿
-    void onDeletePublished(int index); // 删除已发布日记
-    void onViewTimeline(int activeIndex = 0); // 查看已发布日记时间线
-    void showDiaryDetail(int index);    // 单条日记详情（浏览+评分）
+    void onCategoryChanged();
+    void onTextChanged();
+    void onSaveDraft();
+    void onAttachPhoto();
+    void onLoadDraft(int index);
+    void onPublishDraft(int index);
+    void onDeleteDraft(int index);
+    void onDeletePublished(int index);
+    void onViewTimeline(int activeIndex = 0);
+    void showDiaryDetail(int index);
 
 private:
     // ========== UI 构建 ==========
     void setupUI();
-    QWidget* createHeaderPanel();
+    QWidget* createTopBar();
+    QWidget* createBottomBar();
+    QWidget* createPageNavigation();
+    QWidget* createPageRecommend();
+    QWidget* createPageSearch();
+    QWidget* createPageDiary();
+
     QWidget* createNavigationPanel();
-    QWidget* createRecommendPanel();         // 旅游推荐面板
-    QWidget* createNearbyFacilityPanel();   // 附近设施查询面板
+    QWidget* createRecommendPanel();
+    QWidget* createNearbyFacilityPanel();
     QWidget* createDiaryPanel();
     QWidget* createDraftListPanel();
     QWidget* createPublishedPanel();
 
     // ========== 辅助方法 ==========
-    void populateSelectors();       // 填充起点/终点下拉框
-    void updateStats();             // 更新统计信息
-    void updateWordCount();         // 更新日记字数
-    void refreshDraftList();        // 刷新草稿列表
-    void refreshPublishedList();    // 刷新已发布列表
-    void syncTrackToDiary();        // 将规划路径同步到日记轨迹
-    void applyGlobalStylesheet();   // 应用全局样式
+    void populateSelectors();
+    void updateStats();
+    void updateWordCount();
+    void refreshDraftList();
+    void refreshPublishedList();
+    void syncTrackToDiary();
+    void applyGlobalStylesheet();
+    void updateTabStyle(int active);
 
     // ========== 核心数据 ==========
-    CampusGraph    m_graph;         // 校园图
-    DiaryManager   m_diaryManager;  // 日记管理器
-    DiaryEntry     m_currentDiary;  // 当前正在编辑的日记
-    UserManager    m_userManager;   // 多用户管理器
+    CampusGraph    m_graph;
+    DiaryManager   m_diaryManager;
+    DiaryEntry     m_currentDiary;
+    UserManager    m_userManager;
 
-    // ========== 顶栏 UI 元素 ==========
-    QComboBox*     m_campusSelect;  // 景区/校园选择器
-    QComboBox*     m_userSelect;    // 用户切换
+    // ========== 顶栏 UI ==========
+    QComboBox*     m_campusSelect;
+    QComboBox*     m_userSelect;
     QLabel*        m_statsLabel;
+
+    // ========== QStackedWidget + 页面 ==========
+    QStackedWidget* m_stack;
+
+    // ========== 底部标签按钮 ==========
+    QPushButton*   m_tabNav;
+    QPushButton*   m_tabRec;
+    QPushButton*   m_tabSearch;
+    QPushButton*   m_tabDiary;
 
     // ========== 导航 UI 元素 ==========
     QComboBox*     m_startSelect;
     QComboBox*     m_endSelect;
-    QComboBox*     m_strategySelect;  // 路线策略
+    QComboBox*     m_strategySelect;
     QPushButton*   m_planBtn;
     QPushButton*   m_finishBtn;
-    QPushButton*   m_addStopBtn;     // 添加途经点
-    QPushButton*   m_multiPlanBtn;   // 途经多点规划
-    QPushButton*   m_clearStopBtn;   // 清空途经点
-    QListWidget*   m_stopList;       // 途经点列表
-    QVector<int>   m_stopIndices;    // 途经点索引缓存
+    QPushButton*   m_addStopBtn;
+    QPushButton*   m_multiPlanBtn;
+    QPushButton*   m_clearStopBtn;
+    QListWidget*   m_stopList;
+    QVector<int>   m_stopIndices;
     MapWidget*     m_mapWidget;
     QLabel*        m_distanceLabel;
     QLabel*        m_pathDisplay;
 
     // ========== 旅游推荐 UI 元素 ==========
-    QComboBox*     m_recSortSelect;       // 排序方式：热度/评分
-    QComboBox*     m_recTypeSelect;       // 类别过滤
-    QLineEdit*     m_recSearchInput;      // 搜索输入
-    QPushButton*   m_recBtn;              // 推荐按钮
-    QPushButton*   m_recSearchBtn;        // 搜索按钮
-    QLabel*        m_recResultLabel;      // 结果标题
-    QVBoxLayout*   m_recResultLayout;     // 结果列表容器
+    QComboBox*     m_recSortSelect;
+    QComboBox*     m_recTypeSelect;
+    QLineEdit*     m_recSearchInput;
+    QPushButton*   m_recBtn;
+    QPushButton*   m_recSearchBtn;
+    QLabel*        m_recResultLabel;
+    QVBoxLayout*   m_recResultLayout;
 
     // ========== 场所查询 UI 元素 ==========
     QComboBox*     m_facilityCenterSelect;
@@ -135,7 +153,7 @@ private:
     QPushButton*   m_queryNearbyBtn;
     QLabel*        m_nearbyResultLabel;
     QVBoxLayout*   m_nearbyResultLayout;
-    int            m_activeCenterIdx;     // 当前查询的中心节点索引
+    int            m_activeCenterIdx;
 
     // ========== 日记 UI 元素 ==========
     QVector<QPushButton*> m_categoryBtns;
@@ -145,19 +163,13 @@ private:
     QPushButton*   m_saveDraftBtn;
     QPushButton*   m_attachPhotoBtn;
 
-    // 草稿列表
     QWidget*       m_draftListPanel;
     QLabel*        m_draftCountBadge;
     QVBoxLayout*   m_draftListLayout;
 
-    // 已发布列表
     QWidget*       m_publishedPanel;
     QLabel*        m_publishedCountBadge;
     QVBoxLayout*   m_publishedListLayout;
-
-    // 滚动区域内的主容器
-    QWidget*       m_scrollContent;
-    QScrollArea*   m_scrollArea;
 };
 
 #endif // MAINWINDOW_H
