@@ -116,63 +116,6 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (idx >= 0) showDiaryDetail(idx);
             return true;
         }
-        // 美食列表点击 → 打开评分弹窗
-        if (label && label->property("isFoodLink").isValid()) {
-            int foodIdx = label->property("foodIndex").toInt();
-            QString curUid = m_userManager.currentUserId();
-            auto items = FoodData::loadAll();
-            if (foodIdx >= 0 && foodIdx < items.size()) {
-                const FoodItem& fi = items[foodIdx];
-                // 小评分弹窗（和日记详情一样：存盘即关）
-                QDialog* dlg = new QDialog(this);
-                dlg->setWindowTitle(QString("⭐ %1").arg(fi.name));
-                dlg->resize(380, 200);
-                dlg->setStyleSheet("QDialog { background: #f8fafc; }");
-                QVBoxLayout* dl = new QVBoxLayout(dlg);
-                dl->setSpacing(10);
-
-                QLabel* info = new QLabel(
-                    QString("%1 · %2\n当前评分: %3 (%4人评)")
-                        .arg(fi.name).arg(fi.cuisine)
-                        .arg(fi.avgRating(), 0, 'f', 1).arg(fi.ratingCount()));
-                info->setStyleSheet("font-size:14px; color:#1e4a6b;");
-                info->setAlignment(Qt::AlignCenter);
-                dl->addWidget(info);
-
-                QHBoxLayout* starRow = new QHBoxLayout();
-                starRow->addStretch();
-                for (int s = 1; s <= 5; ++s) {
-                    QPushButton* sb = new QPushButton(QChar(0x2605));
-                    sb->setFixedSize(44, 44);
-                    sb->setCursor(Qt::PointingHandCursor);
-                    int cr = fi.getUserRating(curUid);
-                    sb->setStyleSheet(QString(
-                        "QPushButton { background:transparent;"
-                        " border:2px solid %1; border-radius:8px;"
-                        " font-size:26px; color:%1; }"
-                        "QPushButton:hover { background:#fff8e0;"
-                        " border-color:#f59e0b; color:#f59e0b; font-size:30px; }"
-                    ).arg((cr > 0 && s <= cr) ? "#f59e0b" : "#d0d0d0"));
-                    connect(sb, &QPushButton::clicked, dlg,
-                        [dlg, foodIdx, curUid, s]() {
-                            FoodData::setRating(foodIdx, curUid, s);
-                            dlg->accept();
-                        });
-                    starRow->addWidget(sb);
-                }
-                starRow->addStretch();
-                dl->addLayout(starRow);
-
-                QLabel* tip = new QLabel("评分后弹窗关闭，重新搜索即可看到更新");
-                tip->setStyleSheet("font-size:11px; color:#7f9aaa;");
-                tip->setAlignment(Qt::AlignCenter);
-                dl->addWidget(tip);
-
-                dlg->exec();
-                dlg->deleteLater();
-            }
-            return true;
-        }
     }
     return QMainWindow::eventFilter(obj, event);
 }
@@ -459,6 +402,7 @@ QWidget* MainWindow::createPageRecommend()
     QVBoxLayout* layout = new QVBoxLayout(page);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createRecommendPanel());
+    layout->addWidget(createFoodRatingPanel());
     layout->addWidget(createFoodPanel());
     layout->addStretch();
 
@@ -2135,36 +2079,11 @@ void MainWindow::onFoodSearch()
 
         QLabel* label = new QLabel(html);
         label->setTextFormat(Qt::RichText);
-        label->setCursor(Qt::PointingHandCursor);
         label->setStyleSheet(
             "QLabel { background:white; border:1px solid #e2edf2;"
-            " border-radius:10px; padding:4px 10px; }"
-            "QLabel:hover { background:#fff8e0; border-color:#f59e0b; }");
-        label->setToolTip("点击评分");
-
-        // 找到该食物在 items 中的索引（用于评分）
-        int foodIdx = i;
-        // 需要重新定位，因为 topK 返回的子集顺序变了
-        for (int j = 0; j < items.size(); ++j) {
-            if (items[j].name == top[i].name &&
-                items[j].cuisine == top[i].cuisine &&
-                items[j].location == top[i].location) {
-                foodIdx = j; break;
-            }
-        }
-
-        label->installEventFilter(this);
-        label->setProperty("foodIndex", foodIdx);
-        label->setProperty("isFoodLink", true);
+            " border-radius:10px; padding:4px 10px; }");
         m_foodResultLayout->addWidget(label);
     }
-}
-
-void MainWindow::onFoodRate(int index, int score)
-{
-    // 存盘即关闭模式（和日记评分一样安全）
-    QString curUid = m_userManager.currentUserId();
-    FoodData::setRating(index, curUid, score);
 }
 
 void MainWindow::onFoodAdd()
@@ -2219,6 +2138,226 @@ void MainWindow::onFoodAdd()
 
     dlg->exec();
     dlg->deleteLater();
+}
+
+// ============================================================
+// 美食评分面板（地标→菜系→美食→★ 级联）
+// ============================================================
+
+QWidget* MainWindow::createFoodRatingPanel()
+{
+    QWidget* panel = new QWidget();
+    panel->setStyleSheet(
+        "background: #f0f7f4;"
+        "border-radius: 20px;"
+        "padding: 16px;"
+        "margin: 12px 28px;"
+        "border: 1px solid #c8e0d2;"
+    );
+    QVBoxLayout* layout = new QVBoxLayout(panel);
+    layout->setSpacing(10);
+
+    QLabel* title = new QLabel("⭐ 美食评分");
+    title->setStyleSheet("font-size:14px; font-weight:700; color:#1f6d49; background:transparent;");
+    layout->addWidget(title);
+
+    // 行1：地标
+    QHBoxLayout* r1 = new QHBoxLayout();
+    r1->setSpacing(8);
+    QLabel* locLabel = new QLabel("地标");
+    locLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:16px; padding:4px 12px; font-size:12px;");
+    r1->addWidget(locLabel);
+    m_foodRateLocSelect = new QComboBox();
+    m_foodRateLocSelect->addItem("—— 选择 ——");
+    // 填充所有餐饮/教学节点
+    const auto& allNodes = m_graph.nodes();
+    for (const auto& n : allNodes) {
+        if (n.facilityType == "餐饮" || n.facilityType == "教学")
+            m_foodRateLocSelect->addItem(n.name);
+    }
+    connect(m_foodRateLocSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onFoodRateLocationChanged);
+    r1->addWidget(m_foodRateLocSelect, 1);
+    layout->addLayout(r1);
+
+    // 行2：菜系
+    QHBoxLayout* r2 = new QHBoxLayout();
+    r2->setSpacing(8);
+    QLabel* cuiLabel = new QLabel("菜系");
+    cuiLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:16px; padding:4px 12px; font-size:12px;");
+    r2->addWidget(cuiLabel);
+    m_foodRateCuisineSelect = new QComboBox();
+    m_foodRateCuisineSelect->addItem("—— 先选地标 ——");
+    m_foodRateCuisineSelect->setEnabled(false);
+    connect(m_foodRateCuisineSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onFoodRateCuisineChanged);
+    r2->addWidget(m_foodRateCuisineSelect, 1);
+    layout->addLayout(r2);
+
+    // 行3：美食名称
+    QHBoxLayout* r3 = new QHBoxLayout();
+    r3->setSpacing(8);
+    QLabel* foodLabel = new QLabel("美食");
+    foodLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:16px; padding:4px 12px; font-size:12px;");
+    r3->addWidget(foodLabel);
+    m_foodRateFoodSelect = new QComboBox();
+    m_foodRateFoodSelect->addItem("—— 先选菜系 ——");
+    m_foodRateFoodSelect->setEnabled(false);
+    connect(m_foodRateFoodSelect, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this]() { refreshFoodStars(); });
+    r3->addWidget(m_foodRateFoodSelect, 1);
+    layout->addLayout(r3);
+
+    // 行4：评分星星
+    QHBoxLayout* r4 = new QHBoxLayout();
+    r4->setSpacing(4);
+    QLabel* starLabel = new QLabel("评分");
+    starLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:16px; padding:4px 12px; font-size:12px;");
+    r4->addWidget(starLabel);
+
+    m_foodRateStars.clear();
+    for (int s = 1; s <= 5; ++s) {
+        QPushButton* sb = new QPushButton(QChar(0x2605));
+        sb->setFixedSize(38, 38);
+        sb->setCursor(Qt::PointingHandCursor);
+        sb->setStyleSheet(
+            "QPushButton { background:transparent; border:2px solid #d0d0d0;"
+            " border-radius:6px; font-size:22px; color:#d0d0d0; }"
+            "QPushButton:hover { background:#fff8e0; border-color:#f59e0b;"
+            " color:#f59e0b; font-size:26px; }");
+        sb->setToolTip(QString("%1 分").arg(s));
+        int score = s;
+        connect(sb, &QPushButton::clicked, this, [this, score]() {
+            onFoodRating(score);
+        });
+        m_foodRateStars.append(sb);
+        r4->addWidget(sb);
+    }
+    r4->addStretch();
+    layout->addLayout(r4);
+
+    return panel;
+}
+
+void MainWindow::refreshFoodStars()
+{
+    QString foodName = m_foodRateFoodSelect->currentText();
+    if (foodName.isEmpty() || foodName.startsWith("——")) {
+        for (auto* sb : m_foodRateStars) {
+            sb->setStyleSheet(
+                "QPushButton { background:transparent; border:2px solid #d0d0d0;"
+                " border-radius:6px; font-size:22px; color:#d0d0d0; }"
+                "QPushButton:hover { background:#fff8e0; border-color:#f59e0b;"
+                " color:#f59e0b; font-size:26px; }");
+        }
+        return;
+    }
+
+    auto items = FoodData::loadAll();
+    QString loc = m_foodRateLocSelect->currentText();
+    QString cuisine = m_foodRateCuisineSelect->currentText();
+    int curRating = 0;
+    for (const auto& f : items) {
+        if (f.name == foodName && f.cuisine == cuisine && f.location == loc) {
+            curRating = f.getUserRating(m_userManager.currentUserId());
+            break;
+        }
+    }
+
+    for (int i = 0; i < 5; ++i) {
+        bool filled = curRating > 0 && i < curRating;
+        m_foodRateStars[i]->setStyleSheet(QString(
+            "QPushButton { background:transparent; border:2px solid %1;"
+            " border-radius:6px; font-size:22px; color:%1; }"
+            "QPushButton:hover { background:#fff8e0; border-color:#f59e0b;"
+            " color:#f59e0b; font-size:26px; }"
+        ).arg(filled ? "#f59e0b" : "#d0d0d0"));
+    }
+}
+
+void MainWindow::onFoodRateLocationChanged()
+{
+    disconnect(m_foodRateCuisineSelect, nullptr, this, nullptr);
+    m_foodRateCuisineSelect->clear();
+
+    QString loc = m_foodRateLocSelect->currentText();
+    if (loc.isEmpty() || loc.startsWith("——")) {
+        m_foodRateCuisineSelect->addItem("—— 先选地标 ——");
+        m_foodRateCuisineSelect->setEnabled(false);
+        return;
+    }
+
+    // 查该节点的 facilityType → 获取菜系列表
+    int idx = m_graph.indexOf(loc);
+    if (idx < 0) return;
+    QString ft = m_graph.nodes()[idx].facilityType;
+    QStringList cuisines = cuisinesForFacility(ft);
+    m_foodRateCuisineSelect->addItem("—— 选菜系 ——");
+    for (const auto& c : cuisines)
+        m_foodRateCuisineSelect->addItem(c);
+    m_foodRateCuisineSelect->setEnabled(true);
+}
+
+void MainWindow::onFoodRateCuisineChanged()
+{
+    disconnect(m_foodRateFoodSelect, nullptr, this, nullptr);
+    m_foodRateFoodSelect->clear();
+
+    QString cuisine = m_foodRateCuisineSelect->currentText();
+    if (cuisine.isEmpty() || cuisine.startsWith("——")) {
+        m_foodRateFoodSelect->addItem("—— 先选菜系 ——");
+        m_foodRateFoodSelect->setEnabled(false);
+        return;
+    }
+
+    // 从 foods.json 中筛选该菜系的美食
+    auto all = FoodData::loadAll();
+    QString loc = m_foodRateLocSelect->currentText();
+    QStringList names;
+    for (const auto& f : all) {
+        if (f.cuisine == cuisine && f.location == loc)
+            names.append(f.name);
+    }
+    names.removeDuplicates();
+
+    m_foodRateFoodSelect->addItem("—— 选美食 ——");
+    for (const auto& n : names)
+        m_foodRateFoodSelect->addItem(n);
+    m_foodRateFoodSelect->setEnabled(!names.isEmpty());
+}
+
+void MainWindow::onFoodRating(int score)
+{
+    QString loc    = m_foodRateLocSelect->currentText();
+    QString cuisine = m_foodRateCuisineSelect->currentText();
+    QString foodName = m_foodRateFoodSelect->currentText();
+    if (loc.startsWith("——") || cuisine.startsWith("——") ||
+        foodName.startsWith("——")) return;
+
+    auto items = FoodData::loadAll();
+    int foodIdx = -1;
+    for (int i = 0; i < items.size(); ++i) {
+        if (items[i].name == foodName &&
+            items[i].cuisine == cuisine &&
+            items[i].location == loc) {
+            foodIdx = i; break;
+        }
+    }
+    if (foodIdx < 0) return;
+
+    QString curUid = m_userManager.currentUserId();
+    FoodData::setRating(foodIdx, curUid, score);
+    // 星星填色 + 刷新排行榜
+    refreshFoodStars();
+    onFoodSearch();
 }
 
 void MainWindow::onCampusChanged(int index)

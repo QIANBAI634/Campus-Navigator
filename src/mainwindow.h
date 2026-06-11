@@ -65,10 +65,12 @@ private slots:
     void onSearchCampus();
 
     // ========== 美食推荐 ==========
-    void onFoodTopK();               // 美食 Top-10
-    void onFoodSearch();             // 美食搜索
-    void onFoodRate(int index, int score); // 美食评分
-    void onFoodAdd();                // 添加菜品
+    void onFoodTopK();
+    void onFoodSearch();
+    void onFoodAdd();
+    void onFoodRating(int score);            // 评分面板打分
+    void onFoodRateLocationChanged();        // 地标切换 → 刷新菜系
+    void onFoodRateCuisineChanged();         // 菜系切换 → 刷新美食
 
     // ========== 日记相关 ==========
     void onCategoryChanged();
@@ -98,6 +100,7 @@ private:
     QWidget* createNavigationPanel();
     QWidget* createDiarySearchPanel();    // 日记搜索/推荐面板
     QWidget* createRecommendPanel();
+    QWidget* createFoodRatingPanel();    // 美食评分面板（地标→菜系→美食→评分）
     QWidget* createFoodPanel();          // 美食推荐面板
     QWidget* createNearbyFacilityPanel();
     QWidget* createDiaryPanel();
@@ -167,6 +170,13 @@ private:
     QPushButton*   m_foodAddBtn = nullptr;
     QLabel*        m_foodResultLabel = nullptr;
     QVBoxLayout*   m_foodResultLayout = nullptr;
+
+    // 美食评分面板（级联下拉框）
+    QComboBox*     m_foodRateLocSelect = nullptr;
+    QComboBox*     m_foodRateCuisineSelect = nullptr;
+    QComboBox*     m_foodRateFoodSelect = nullptr;
+    QVector<QPushButton*> m_foodRateStars;        // 5颗星按钮
+    void refreshFoodStars();                      // 刷新星星颜色
 
     // ========== 场所查询 UI 元素 ==========
     QComboBox*     m_facilityCenterSelect;
