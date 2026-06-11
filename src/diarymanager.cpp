@@ -162,6 +162,97 @@ bool DiaryManager::setUserRating(const QString& dataDir, int index,
     return savePublished(dataDir, published);
 }
 
+// ========== 日记搜索/推荐 核心算法 ==========
+
+namespace {
+
+// 小顶堆下沉 — 与旅游推荐共用同一个堆框架
+void diaryHeapSiftDown(QVector<DiaryEntry>& heap, int i, int heapSize, bool byHeat)
+{
+    while (true) {
+        int left  = 2 * i + 1;
+        int right = 2 * i + 2;
+        int smallest = i;
+        auto key = [byHeat](const DiaryEntry& d) {
+            return byHeat ? static_cast<double>(d.views) : d.avgRating();
+        };
+        if (left  < heapSize && key(heap[left])  < key(heap[smallest])) smallest = left;
+        if (right < heapSize && key(heap[right]) < key(heap[smallest])) smallest = right;
+        if (smallest == i) break;
+        std::swap(heap[i], heap[smallest]);
+        i = smallest;
+    }
+}
+
+} // anonymous namespace
+
+QVector<DiaryEntry> DiaryManager::topKDiaries(const QVector<DiaryEntry>& src,
+                                                int k, bool byHeat)
+{
+    if (src.isEmpty()) return {};
+    k = qMin(k, src.size());
+
+    QVector<DiaryEntry> heap;
+    for (int i = 0; i < k; ++i) heap.append(src[i]);
+    for (int i = k / 2 - 1; i >= 0; --i)
+        diaryHeapSiftDown(heap, i, k, byHeat);
+
+    auto key = [byHeat](const DiaryEntry& d) {
+        return byHeat ? static_cast<double>(d.views) : d.avgRating();
+    };
+
+    for (int i = k; i < src.size(); ++i) {
+        if (key(src[i]) > key(heap[0])) {
+            heap[0] = src[i];
+            diaryHeapSiftDown(heap, 0, k, byHeat);
+        }
+    }
+
+    for (int i = k - 1; i >= 1; --i) {
+        std::swap(heap[0], heap[i]);
+        diaryHeapSiftDown(heap, 0, i, byHeat);
+    }
+    std::reverse(heap.begin(), heap.end());
+    return heap;
+}
+
+QVector<DiaryEntry> DiaryManager::searchByDestination(
+    const QVector<DiaryEntry>& src, const QString& keyword, bool byHeat)
+{
+    QVector<DiaryEntry> matched;
+    // 匹配 campusName 或任一轨迹点名
+    for (const auto& d : src) {
+        bool hit = d.campusName.contains(keyword, Qt::CaseInsensitive);
+        if (!hit) {
+            for (const auto& tp : d.trackPoints) {
+                QString nm = tp["name"].toString();
+                if (nm.contains(keyword, Qt::CaseInsensitive)) {
+                    hit = true; break;
+                }
+            }
+        }
+        if (hit) matched.append(d);
+    }
+
+    // 按热度/评分降序排序
+    std::sort(matched.begin(), matched.end(),
+        [byHeat](const DiaryEntry& a, const DiaryEntry& b) {
+            if (byHeat) return a.views > b.views;
+            return a.avgRating() > b.avgRating();
+        });
+    return matched;
+}
+
+int DiaryManager::findDiaryByTitle(const QVector<DiaryEntry>& src,
+                                     const QString& title)
+{
+    // 构建 QHash 索引 → O(1) 查找
+    QHash<QString, int> index;
+    for (int i = 0; i < src.size(); ++i)
+        index[src[i].title] = i;
+    return index.value(title.trimmed(), -1);
+}
+
 // ========== 图片管理 ==========
 
 QString DiaryManager::copyPhotoToStorage(const QString& sourcePath)

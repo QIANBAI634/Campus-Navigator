@@ -74,6 +74,9 @@ private slots:
     void onDeletePublished(int index);
     void onViewTimeline(int activeIndex = 0);
     void showDiaryDetail(int index);
+    void onRecommendDiaries();          // 日记 Top-K
+    void onSearchDiaryTitle();          // 精确查标题
+    void onSearchDiaryDest();           // 按目的地查
 
 private:
     // ========== UI 构建 ==========
@@ -86,6 +89,7 @@ private:
     QWidget* createPageDiary();
 
     QWidget* createNavigationPanel();
+    QWidget* createDiarySearchPanel();    // 日记搜索/推荐面板
     QWidget* createRecommendPanel();
     QWidget* createNearbyFacilityPanel();
     QWidget* createDiaryPanel();
@@ -157,12 +161,21 @@ private:
     int            m_activeCenterIdx;
 
     // ========== 日记 UI 元素 ==========
+    QLineEdit*     m_diaryTitleInput = nullptr;
     QVector<QPushButton*> m_categoryBtns;
     QTextEdit*     m_diaryTextarea;
     QLabel*        m_diaryStatus;
     QLabel*        m_diarySummary;
     QPushButton*   m_saveDraftBtn;
     QPushButton*   m_attachPhotoBtn;
+    // 日记搜索/推荐
+    QPushButton*   m_diaryRecBtn = nullptr;
+    QPushButton*   m_diarySearchDestBtn = nullptr;
+    QPushButton*   m_diarySearchTitleBtn = nullptr;
+    QLineEdit*     m_diarySearchDestInput = nullptr;
+    QLineEdit*     m_diarySearchTitleInput = nullptr;
+    QLabel*        m_diarySearchResultLabel = nullptr;
+    QVBoxLayout*   m_diarySearchResultLayout = nullptr;
 
     QWidget*       m_draftListPanel;
     QLabel*        m_draftCountBadge;

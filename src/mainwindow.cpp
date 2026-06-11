@@ -446,6 +446,7 @@ QWidget* MainWindow::createPageDiary()
     layout->addWidget(createDiaryPanel());
     layout->addWidget(createDraftListPanel());
     layout->addWidget(createPublishedPanel());
+    layout->addWidget(createDiarySearchPanel());
     layout->addStretch();
 
     sa->setWidget(page);
@@ -1162,6 +1163,125 @@ QWidget* MainWindow::createNearbyFacilityPanel()
 // ============================================================
 // 日记面板
 // ============================================================
+// 日记搜索/推荐面板
+// ============================================================
+
+QWidget* MainWindow::createDiarySearchPanel()
+{
+    QWidget* panel = new QWidget();
+    panel->setStyleSheet(
+        "background: #f0f4f9;"
+        "border-radius: 20px;"
+        "padding: 16px;"
+        "margin: 12px 0;"
+        "border: 1px solid #dce5ec;"
+    );
+    QVBoxLayout* layout = new QVBoxLayout(panel);
+    layout->setSpacing(10);
+
+    // 标题
+    QLabel* secTitle = new QLabel("🔎 日记搜索与推荐");
+    secTitle->setStyleSheet("font-size:14px; font-weight:700; color:#1e4a6b; background:transparent;");
+    layout->addWidget(secTitle);
+
+    // 第一行：Top-K 排行按钮
+    QHBoxLayout* row1 = new QHBoxLayout();
+    row1->setSpacing(8);
+
+    m_diaryRecBtn = new QPushButton("🏆 热度 Top-5 日记");
+    m_diaryRecBtn->setStyleSheet(
+        "QPushButton { background:#1f6d49; color:white; border:none;"
+        " border-radius: 18px; padding: 8px 16px; font-size: 12px; font-weight:600; }"
+        "QPushButton:hover { background:#0e5437; }");
+    m_diaryRecBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_diaryRecBtn, &QPushButton::clicked, this, &MainWindow::onRecommendDiaries);
+    row1->addWidget(m_diaryRecBtn);
+
+    // 切换按热度/评分
+    QPushButton* toggleBtn = new QPushButton("按评分");
+    toggleBtn->setCheckable(true);
+    toggleBtn->setStyleSheet(
+        "QPushButton { background:white; color:#1e4a6b; border:1px solid #cbdde6;"
+        " border-radius: 18px; padding: 8px 14px; font-size:12px; }"
+        "QPushButton:checked { background:#0f5b7a; color:white; }");
+    toggleBtn->setCursor(Qt::PointingHandCursor);
+
+    // 点击切换推荐模式
+    connect(toggleBtn, &QPushButton::clicked, this,
+        [this, toggleBtn]() {
+            m_diaryRecBtn->setText(
+                toggleBtn->isChecked() ? "🏆 评分 Top-5 日记" : "🏆 热度 Top-5 日记");
+            m_diaryRecBtn->setToolTip(
+                toggleBtn->isChecked() ? "按平均分排序" : "按浏览次数排序");
+        });
+    row1->addWidget(toggleBtn);
+    row1->addStretch();
+    layout->addLayout(row1);
+
+    // 第二行：按目的地搜索
+    QHBoxLayout* row2 = new QHBoxLayout();
+    row2->setSpacing(6);
+
+    m_diarySearchDestInput = new QLineEdit();
+    m_diarySearchDestInput->setPlaceholderText("输入目的地名称...");
+    m_diarySearchDestInput->setStyleSheet(
+        "QLineEdit { background:white; border:1px solid #cbdde6;"
+        " border-radius: 16px; padding: 6px 12px; font-size: 12px; color:#1f2f38; }"
+        "QLineEdit:focus { border-color: #0f5b7a; }");
+    row2->addWidget(m_diarySearchDestInput, 1);
+
+    m_diarySearchDestBtn = new QPushButton("📍 查目的地");
+    m_diarySearchDestBtn->setStyleSheet(
+        "QPushButton { background:#0f5b7a; color:white; border:none;"
+        " border-radius: 16px; padding: 6px 14px; font-size: 12px; font-weight:600; }"
+        "QPushButton:hover { background:#0a3d52; }");
+    m_diarySearchDestBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_diarySearchDestBtn, &QPushButton::clicked, this, &MainWindow::onSearchDiaryDest);
+    row2->addWidget(m_diarySearchDestBtn);
+    layout->addLayout(row2);
+
+    // 第三行：按标题精确查询
+    QHBoxLayout* row3 = new QHBoxLayout();
+    row3->setSpacing(6);
+
+    m_diarySearchTitleInput = new QLineEdit();
+    m_diarySearchTitleInput->setPlaceholderText("输入完整日记标题...");
+    m_diarySearchTitleInput->setStyleSheet(
+        "QLineEdit { background:white; border:1px solid #cbdde6;"
+        " border-radius: 16px; padding: 6px 12px; font-size: 12px; color:#1f2f38; }"
+        "QLineEdit:focus { border-color: #0f5b7a; }");
+    row3->addWidget(m_diarySearchTitleInput, 1);
+
+    m_diarySearchTitleBtn = new QPushButton("🔍 查标题");
+    m_diarySearchTitleBtn->setStyleSheet(
+        "QPushButton { background:#f59e0b; color:white; border:none;"
+        " border-radius: 16px; padding: 6px 14px; font-size: 12px; font-weight:600; }"
+        "QPushButton:hover { background:#d97706; }");
+    m_diarySearchTitleBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_diarySearchTitleBtn, &QPushButton::clicked, this, &MainWindow::onSearchDiaryTitle);
+    row3->addWidget(m_diarySearchTitleBtn);
+    layout->addLayout(row3);
+
+    // 结果标签
+    m_diarySearchResultLabel = new QLabel("💡 Top-K排行 / 目的地搜索 / 标题精确查找");
+    m_diarySearchResultLabel->setWordWrap(true);
+    m_diarySearchResultLabel->setStyleSheet(
+        "background: #fefce8; border-left: 4px solid #1f6d49;"
+        "border-radius: 12px; padding: 8px 14px; font-size: 12px; color: #1f2f38;");
+    layout->addWidget(m_diarySearchResultLabel);
+
+    // 结果列表容器
+    QWidget* rc = new QWidget();
+    rc->setStyleSheet("background: transparent;");
+    m_diarySearchResultLayout = new QVBoxLayout(rc);
+    m_diarySearchResultLayout->setContentsMargins(0, 0, 0, 0);
+    m_diarySearchResultLayout->setSpacing(4);
+    layout->addWidget(rc);
+
+    return panel;
+}
+
+// ============================================================
 
 QWidget* MainWindow::createDiaryPanel()
 {
@@ -1180,6 +1300,16 @@ QWidget* MainWindow::createDiaryPanel()
     QLabel* title = new QLabel("📝 旅行日记");
     title->setStyleSheet("font-size:16px; font-weight:700; color:#0f5b7a;");
     layout->addWidget(title);
+
+    // 日记标题输入框
+    m_diaryTitleInput = new QLineEdit();
+    m_diaryTitleInput->setPlaceholderText("输入日记标题（用于搜索）");
+    m_diaryTitleInput->setStyleSheet(
+        "QLineEdit { background: white; border: 1px solid #cbdde6;"
+        " border-radius: 14px; padding: 8px 14px; font-size: 14px;"
+        " font-weight: 600; color: #1e4a6b; }"
+        "QLineEdit:focus { border-color: #0f5b7a; }");
+    layout->addWidget(m_diaryTitleInput);
 
     // 分类按钮 — 2行3列网格布局，确保每个按钮足够宽
     QGridLayout* catLayout = new QGridLayout();
@@ -1825,6 +1955,7 @@ void MainWindow::onTextChanged()
 void MainWindow::onSaveDraft()
 {
     // 确保内容同步
+    m_currentDiary.title   = m_diaryTitleInput->text().trimmed();
     m_currentDiary.content = m_diaryTextarea->toPlainText();
     m_currentDiary.createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
     m_currentDiary.id = QDateTime::currentMSecsSinceEpoch();
@@ -1841,6 +1972,7 @@ void MainWindow::onSaveDraft()
         m_currentDiary.id = QDateTime::currentMSecsSinceEpoch();
         m_currentDiary.category = DiaryCategory::TRAVEL_NOTE;
         m_currentDiary.userId = "current_user";
+        m_diaryTitleInput->clear();
         m_diaryTextarea->clear();
         if (!m_categoryBtns.isEmpty()) {
             m_categoryBtns[0]->setChecked(true);
@@ -1895,6 +2027,7 @@ void MainWindow::onLoadDraft(int index)
     if (index < 0 || index >= drafts.size()) return;
 
     m_currentDiary = drafts[index];
+    m_diaryTitleInput->setText(m_currentDiary.title);
     m_diaryTextarea->setPlainText(m_currentDiary.content);
 
     // 设置分类按钮
@@ -2328,6 +2461,142 @@ void MainWindow::showDiaryDetail(int index)
 
     dialog->exec();
     dialog->deleteLater();
+}
+
+// ============================================================
+// 日记搜索/推荐 槽函数
+// ============================================================
+
+void MainWindow::onRecommendDiaries()
+{
+    // 清旧结果
+    QLayoutItem* child;
+    while ((child = m_diarySearchResultLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
+    if (published.isEmpty()) {
+        m_diarySearchResultLabel->setText("📭 暂无已发布日记");
+        return;
+    }
+
+    bool byHeat = m_diaryRecBtn->text().contains("热度");
+    auto top = DiaryManager::topKDiaries(published, 5, byHeat);
+
+    if (top.isEmpty()) {
+        m_diarySearchResultLabel->setText("📭 无结果");
+        return;
+    }
+
+    m_diarySearchResultLabel->setText(
+        QString("🏆 %1 Top-5").arg(byHeat ? "热度" : "评分"));
+
+    for (int i = 0; i < top.size(); ++i) {
+        QString ttl = top[i].title.isEmpty() ? "(无标题)" : top[i].title;
+        QString html = QString(
+            "<table width='100%' cellspacing='0' cellpadding='3'>"
+            "<tr>"
+            "<td width='30' align='center' style='font-weight:700;'>%1</td>"
+            "<td align='left' style='font-weight:600; color:#1e4a6b;'>%2</td>"
+            "<td width='60' align='right' style='color:#c2410c;'>👁%3</td>"
+            "<td width='55' align='right' style='color:#f59e0b;'>⭐%4</td>"
+            "</tr></table>"
+        ).arg(i+1).arg(ttl.toHtmlEscaped())
+         .arg(top[i].views)
+         .arg(top[i].avgRating(), 0, 'f', 1);
+
+        QLabel* label = new QLabel(html);
+        label->setTextFormat(Qt::RichText);
+        label->setStyleSheet(
+            "QLabel { background:white; border:1px solid #e2edf2;"
+            " border-radius: 10px; padding: 4px 10px; }");
+        m_diarySearchResultLayout->addWidget(label);
+    }
+}
+
+void MainWindow::onSearchDiaryDest()
+{
+    QLayoutItem* child;
+    while ((child = m_diarySearchResultLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+
+    QString kw = m_diarySearchDestInput->text().trimmed();
+    if (kw.isEmpty()) {
+        m_diarySearchResultLabel->setText("❌ 请输入目的地关键字");
+        return;
+    }
+
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
+    bool byHeat = m_diaryRecBtn->text().contains("热度");
+    auto results = DiaryManager::searchByDestination(published, kw, byHeat);
+
+    if (results.isEmpty()) {
+        m_diarySearchResultLabel->setText(
+            QString("📭 未找到目的地含「%1」的日记").arg(kw));
+        return;
+    }
+
+    m_diarySearchResultLabel->setText(
+        QString("📍 找到 %1 条目的地含「%2」的日记").arg(results.size()).arg(kw));
+
+    for (int i = 0; i < results.size(); ++i) {
+        QString ttl = results[i].title.isEmpty() ? "(无标题)" : results[i].title;
+        QString html = QString(
+            "<table width='100%' cellspacing='0' cellpadding='3'>"
+            "<tr>"
+            "<td width='26' align='center'>%1</td>"
+            "<td align='left' style='color:#1e4a6b;'>%2</td>"
+            "<td width='50' align='right' style='color:#c2410c;'>👁%3</td>"
+            "<td width='50' align='right' style='color:#f59e0b;'>⭐%4</td>"
+            "</tr></table>"
+        ).arg(i+1).arg(ttl.toHtmlEscaped())
+         .arg(results[i].views)
+         .arg(results[i].avgRating(), 0, 'f', 1);
+
+        QLabel* label = new QLabel(html);
+        label->setTextFormat(Qt::RichText);
+        label->setStyleSheet(
+            "QLabel { background:white; border:1px solid #e2edf2;"
+            " border-radius:10px; padding:4px 10px; }");
+        m_diarySearchResultLayout->addWidget(label);
+    }
+}
+
+void MainWindow::onSearchDiaryTitle()
+{
+    QLayoutItem* child;
+    while ((child = m_diarySearchResultLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+
+    QString title = m_diarySearchTitleInput->text().trimmed();
+    if (title.isEmpty()) {
+        m_diarySearchResultLabel->setText("❌ 请输入日记标题");
+        return;
+    }
+
+    QString globalDir = QApplication::applicationDirPath() + "/data";
+    QVector<DiaryEntry> published = DiaryManager::loadPublished(globalDir);
+    int idx = DiaryManager::findDiaryByTitle(published, title);
+
+    if (idx < 0) {
+        m_diarySearchResultLabel->setText(
+            QString("📭 未找到标题为「%1」的日记").arg(title));
+        return;
+    }
+
+    // 找到 → 显示 + 浏览+1
+    m_diarySearchResultLabel->setText(
+        QString("✅ 找到匹配日记 (QHash O(1)查找)"));
+    // 直接打开详情（浏览+1，可评分）
+    showDiaryDetail(idx);
 }
 
 // ============================================================

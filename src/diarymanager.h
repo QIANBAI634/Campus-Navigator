@@ -111,6 +111,7 @@ struct PhotoAttachment {
 // ============================================================
 struct DiaryEntry {
     qint64                  id;             // 唯一标识（时间戳）
+    QString                 title;          // 日记标题
     QString                 content;        // 日记文本内容
     QString                 category;       // 分类
     QString                 campusName;     // 当前景区/校园名称
@@ -157,6 +158,7 @@ struct DiaryEntry {
     QJsonObject toJson() const {
         QJsonObject obj;
         obj["id"]         = id;
+        obj["title"]      = title;
         obj["content"]    = content;
         obj["category"]   = category;
         obj["campusName"] = campusName;
@@ -192,6 +194,7 @@ struct DiaryEntry {
     static DiaryEntry fromJson(const QJsonObject& obj) {
         DiaryEntry entry;
         entry.id           = static_cast<qint64>(obj["id"].toDouble());
+        entry.title        = obj["title"].toString();
         entry.content      = obj["content"].toString();
         entry.category     = obj["category"].toString();
         entry.campusName   = obj["campusName"].toString();
@@ -252,6 +255,21 @@ public:
     // 设置用户评分 (1~5)，同一用户后评覆盖前评
     static bool setUserRating(const QString& dataDir, int index,
                               const QString& userId, int score);
+
+    // ========== 日记搜索/推荐（核心算法）==========
+
+    // 堆 Top-K 选择：按热度(views)或评分(avgRating)选出前K条
+    static QVector<DiaryEntry> topKDiaries(const QVector<DiaryEntry>& src, int k,
+                                            bool byHeat);
+
+    // 按目的地搜索 + 排序
+    static QVector<DiaryEntry> searchByDestination(const QVector<DiaryEntry>& src,
+                                                    const QString& keyword,
+                                                    bool byHeat);
+
+    // 按标题精确查找（基于 QHash，O(1) 均摊）
+    static int findDiaryByTitle(const QVector<DiaryEntry>& src,
+                                const QString& title);
 
     // ========== 图片管理 ==========
     QString copyPhotoToStorage(const QString& sourcePath);
