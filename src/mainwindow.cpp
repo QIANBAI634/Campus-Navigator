@@ -43,8 +43,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_activeCenterIdx = -1;
 
     // 构建 UI
-    applyGlobalStylesheet();
     setupUI();
+    applyGlobalStylesheet();
     populateSelectors();
     updateStats();
     updateWordCount();
@@ -343,25 +343,14 @@ QWidget* MainWindow::createBottomBar()
 
 QWidget* MainWindow::createPageNavigation()
 {
-    QScrollArea* sa = new QScrollArea();
-    sa->setWidgetResizable(true);
-    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    sa->setFrameShape(QFrame::NoFrame);
-    sa->setStyleSheet(
-        "QScrollArea { border: none; background: transparent; }"
-        "QScrollBar:vertical { background: #f0f4f9; width: 8px; border-radius: 4px; }"
-        "QScrollBar::handle:vertical { background: #cbdde6; border-radius: 4px; min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }");
-
+    // 导航页面不包裹 QScrollArea（内含 QGraphicsView 已可滚动）
     QWidget* page = new QWidget();
     page->setStyleSheet("background: #d9e2ec;");
     QVBoxLayout* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 8, 16, 8);
+    layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createNavigationPanel());
     layout->addStretch();
-
-    sa->setWidget(page);
-    return sa;
+    return page;
 }
 
 QWidget* MainWindow::createPageRecommend()
@@ -379,7 +368,7 @@ QWidget* MainWindow::createPageRecommend()
     QWidget* page = new QWidget();
     page->setStyleSheet("background: #d9e2ec;");
     QVBoxLayout* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 8, 16, 8);
+    layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createRecommendPanel());
     layout->addStretch();
 
@@ -402,7 +391,7 @@ QWidget* MainWindow::createPageSearch()
     QWidget* page = new QWidget();
     page->setStyleSheet("background: #d9e2ec;");
     QVBoxLayout* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 8, 16, 8);
+    layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createNearbyFacilityPanel());
     layout->addStretch();
 
@@ -425,7 +414,7 @@ QWidget* MainWindow::createPageDiary()
     QWidget* page = new QWidget();
     page->setStyleSheet("background: #d9e2ec;");
     QVBoxLayout* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 8, 16, 8);
+    layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createDiaryPanel());
     layout->addWidget(createDraftListPanel());
     layout->addWidget(createPublishedPanel());

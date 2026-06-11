@@ -111,7 +111,7 @@ private:
     // ========== 顶栏 UI ==========
     QComboBox*     m_campusSelect;
     QComboBox*     m_userSelect;
-    QLabel*        m_statsLabel;
+    QLabel*        m_statsLabel = nullptr;
 
     // ========== QStackedWidget + 页面 ==========
     QStackedWidget* m_stack;
