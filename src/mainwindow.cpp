@@ -95,6 +95,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             }
             return true;
         }
+        // 日记搜索排行榜 / 目的地结果点击 → 打开详情
+        if (label && label->property("isDiaryLink").isValid()) {
+            int idx = label->property("diaryIndex").toInt();
+            if (idx >= 0) showDiaryDetail(idx);
+            return true;
+        }
     }
     return QMainWindow::eventFilter(obj, event);
 }
@@ -2481,6 +2487,12 @@ void MainWindow::onRecommendDiaries()
         QString("🏆 %1 Top-5").arg(byHeat ? "热度" : "评分"));
 
     for (int i = 0; i < top.size(); ++i) {
+        // 在 published 中查找原始索引
+        int origIdx = -1;
+        for (int p = 0; p < published.size(); ++p) {
+            if (published[p].id == top[i].id) { origIdx = p; break; }
+        }
+
         QString ttl = top[i].preview();
         QString html = QString(
             "<table width='100%' cellspacing='0' cellpadding='3'>"
@@ -2496,9 +2508,15 @@ void MainWindow::onRecommendDiaries()
 
         QLabel* label = new QLabel(html);
         label->setTextFormat(Qt::RichText);
+        label->setCursor(Qt::PointingHandCursor);
         label->setStyleSheet(
             "QLabel { background:white; border:1px solid #e2edf2;"
-            " border-radius: 10px; padding: 4px 10px; }");
+            " border-radius: 10px; padding: 4px 10px; }"
+            "QLabel:hover { background:#e9f2f5; border-color:#1f6d49; }");
+        label->setToolTip("点击查看详情");
+        label->installEventFilter(this);
+        label->setProperty("diaryIndex", origIdx);
+        label->setProperty("isDiaryLink", true);
         m_diarySearchResultLayout->addWidget(label);
     }
 }
@@ -2532,6 +2550,10 @@ void MainWindow::onSearchDiaryDest()
         QString("📍 找到 %1 条目的地含「%2」的日记").arg(results.size()).arg(kw));
 
     for (int i = 0; i < results.size(); ++i) {
+        int origIdx = -1;
+        for (int p = 0; p < published.size(); ++p) {
+            if (published[p].id == results[i].id) { origIdx = p; break; }
+        }
         QString ttl = results[i].preview();
         QString html = QString(
             "<table width='100%' cellspacing='0' cellpadding='3'>"
@@ -2547,9 +2569,15 @@ void MainWindow::onSearchDiaryDest()
 
         QLabel* label = new QLabel(html);
         label->setTextFormat(Qt::RichText);
+        label->setCursor(Qt::PointingHandCursor);
         label->setStyleSheet(
             "QLabel { background:white; border:1px solid #e2edf2;"
-            " border-radius:10px; padding:4px 10px; }");
+            " border-radius:10px; padding:4px 10px; }"
+            "QLabel:hover { background:#e9f2f5; border-color:#1f6d49; }");
+        label->setToolTip("点击查看详情");
+        label->installEventFilter(this);
+        label->setProperty("diaryIndex", origIdx);
+        label->setProperty("isDiaryLink", true);
         m_diarySearchResultLayout->addWidget(label);
     }
 }
