@@ -24,6 +24,7 @@
 #include <QButtonGroup>
 #include <QEvent>
 #include <QLineEdit>
+#include <QListWidget>
 
 #include "graph.h"
 #include "diarymanager.h"
@@ -49,6 +50,9 @@ private slots:
     void onFinishNavigation();      // 完成导航按钮
     void onCampusChanged(int index); // 切换景区/校园
     void onUserChanged(int index);   // 切换用户
+    void onPlanMultiStop();         // 途经多点规划
+    void onAddStop();               // 添加途经点
+    void onClearStops();            // 清空途经点
 
     // ========== 场所查询 ==========
     void onQueryNearbyFacilities();  // 查询附近设施
@@ -103,8 +107,14 @@ private:
     // ========== 导航 UI 元素 ==========
     QComboBox*     m_startSelect;
     QComboBox*     m_endSelect;
+    QComboBox*     m_strategySelect;  // 路线策略
     QPushButton*   m_planBtn;
     QPushButton*   m_finishBtn;
+    QPushButton*   m_addStopBtn;     // 添加途经点
+    QPushButton*   m_multiPlanBtn;   // 途经多点规划
+    QPushButton*   m_clearStopBtn;   // 清空途经点
+    QListWidget*   m_stopList;       // 途经点列表
+    QVector<int>   m_stopIndices;    // 途经点索引缓存
     MapWidget*     m_mapWidget;
     QLabel*        m_distanceLabel;
     QLabel*        m_pathDisplay;

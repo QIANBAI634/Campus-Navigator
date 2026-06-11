@@ -13,6 +13,8 @@
 
 #include <QVector>
 #include <QMap>
+#include <QSet>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <limits>
@@ -27,8 +29,19 @@
 
 // 表示一条邻接边
 struct Edge {
-    int to;         // 目标节点索引
-    double weight;  // 边权（米，基于经纬度计算）
+    int    to;               // 目标节点索引
+    double weight;           // 边权（米，基于经纬度计算）
+    double congestion = 1.0; // 拥挤度 (0.1~1.0)
+    bool   allowBike = true; // 允许自行车
+    bool   isShuttle = false;// 电瓶车路线
+};
+
+// 路线规划策略
+enum RouteStrategy {
+    SHORTEST_DISTANCE = 0,  // 最短距离（原 Dijkstra）
+    SHORTEST_TIME     = 1,  // 最短时间（含拥挤度）
+    BIKE_ONLY         = 2,  // 仅自行车道
+    SHUTTLE           = 3   // 电瓶车路线
 };
 
 // 附近设施查询结果
@@ -37,6 +50,13 @@ struct NearbyFacility {
     double distance;    // 实际步行距离（米），基于 Dijkstra 路径
     QString name;       // 设施名称
     QString category;   // 设施类别
+};
+
+// 多点路径规划结果
+struct MultiStopResult {
+    QVector<int> fullPath;      // 完整路径
+    QVector<int> visitOrder;    // 途经点在路径中的顺序（索引）
+    double       totalDistance; // 总距离（米）
 };
 
 /**
@@ -72,15 +92,26 @@ public:
     // ========== 核心算法 ==========
 
     /**
-     * Dijkstra 最短路径算法
+     * Dijkstra 最短路径算法（基础版：最短距离）
      * @param startIdx 起点索引
      * @param endIdx   终点索引
      * @return 距离数组和前驱数组
-     *
-     * 时间复杂度：O(V²)，其中 V 为节点数
-     * 使用未优化版本以展示经典 Dijkstra 算法结构
+     * 时间复杂度：O(V²)
      */
     DijkstraResult dijkstra(int startIdx, int endIdx) const;
+
+    /**
+     * Dijkstra 最短路径算法（策略版）
+     * @param startIdx  起点索引
+     * @param endIdx    终点索引
+     * @param strategy  路线策略
+     *   - SHORTEST_DISTANCE: 边权=原始距离
+     *   - SHORTEST_TIME:     边权=距离/拥挤度（拥挤度越低边权越大）
+     *   - BIKE_ONLY:         仅走自行车道（allowBike==true）
+     *   - SHUTTLE:           仅走电瓶车路线（isShuttle==true）
+     * @return 距离数组和前驱数组
+     */
+    DijkstraResult dijkstra(int startIdx, int endIdx, RouteStrategy strategy) const;
 
     /**
      * 根据前驱数组重构最短路径
@@ -117,6 +148,16 @@ public:
     QVector<NearbyFacility> findNearbyFacilities(int centerIdx,
                                                   double maxRange = 500.0,
                                                   const QString& categoryFilter = "") const;
+
+    /**
+     * 途经多点最短路径
+     * 通过两两 Dijkstra + 全排列枚举求最优访问顺序
+     * @param startIdx    起点索引
+     * @param stopIndices 途经点索引列表
+     * @return 完整路径 + 访问顺序 + 总距离
+     */
+    MultiStopResult findMultiStopRoute(int startIdx,
+                                       const QVector<int>& stopIndices) const;
 
 private:
     QVector<NodeInfo>           m_nodeList;       // 所有节点
@@ -166,6 +207,31 @@ inline CampusGraph::CampusGraph()
 inline void CampusGraph::buildGraph()
 {
     m_edgeCount = 0;
+
+    // 伪随机哈希，用于生成拥挤度
+    auto edgeHash = [](int a, int b) -> double {
+        unsigned h = static_cast<unsigned>(a * 2654435761ULL + b * 1597334677ULL);
+        return 0.3 + (h % 71) * 0.01;  // 0.30 ~ 1.00
+    };
+
+    // 定义电瓶车路线（固定站点序列）
+    QSet<QPair<QString,QString>> shuttleEdges;
+    QStringList shuttleStops = {"西门","菜鸟驿站","学生食堂","南门","图书馆","医务室"};
+    for (int i = 0; i < shuttleStops.size() - 1; ++i) {
+        shuttleEdges.insert({shuttleStops[i], shuttleStops[i+1]});
+        shuttleEdges.insert({shuttleStops[i+1], shuttleStops[i]});
+    }
+
+    // 定义主干道节点（自行车可通行）
+    QSet<QString> mainRoadNodes = {
+        "西门","菜鸟驿站","篮球场","体育场","打印店","雁北园","风味食堂",
+        "学生活动中心","综合办公楼","雁南园","公共教学楼","学生食堂","南门",
+        "教学实验综合楼N楼","教学实验综合楼S楼","图书馆","医务室","网安院","数媒院",
+        "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15",
+        "16","17","18","19","20","21","22","23","24","25","26","27","28",
+        "29","30","31","32","33","34"
+    };
+
     for (const auto& edge : edgesRaw) {
         int fromIdx = m_nodeIndexMap.value(edge.from, -1);
         int toIdx   = m_nodeIndexMap.value(edge.to, -1);
@@ -177,35 +243,41 @@ inline void CampusGraph::buildGraph()
         double w = haversineDistance(fromNode.lng, fromNode.lat,
                                      toNode.lng, toNode.lat);
 
+        bool isShuttle = shuttleEdges.contains({edge.from, edge.to});
+        bool onMainRoad = mainRoadNodes.contains(edge.from) &&
+                          mainRoadNodes.contains(edge.to);
+        double cong = edgeHash(fromIdx, toIdx);
+
         // 无向边：双向添加
-        m_adj[fromIdx].push_back({toIdx, w});
-        m_adj[toIdx].push_back({fromIdx, w});
+        m_adj[fromIdx].push_back({toIdx, w, cong, onMainRoad, isShuttle});
+        m_adj[toIdx].push_back({fromIdx, w, cong, onMainRoad, isShuttle});
         ++m_edgeCount;
     }
 
-    // ============================================================
-    // 自动拆分长边，扩充至 200 条以上（满足课程设计要求）
-    // 策略：每次找最长边，在中点插入虚拟路口节点，一条变两条
-    // ============================================================
+    // 自动拆分长边
     const int TARGET_EDGES = 200;
-    int splitNodeId = 35;  // 继续路口编号（34个已有路口之后）
+    int splitNodeId = 35;
 
     while (m_edgeCount < TARGET_EDGES) {
-        // 找最长边
         double maxW = 0.0;
         int maxU = -1, maxV = -1;
+        double maxCong = 1.0;
+        bool   maxBike = true;
+        bool   maxShuttle = false;
         for (int u = 0; u < m_adj.size(); ++u) {
             for (int j = 0; j < m_adj[u].size(); ++j) {
                 if (m_adj[u][j].to > u && m_adj[u][j].weight > maxW) {
                     maxW = m_adj[u][j].weight;
                     maxU = u;
                     maxV = m_adj[u][j].to;
+                    maxCong = m_adj[u][j].congestion;
+                    maxBike = m_adj[u][j].allowBike;
+                    maxShuttle = m_adj[u][j].isShuttle;
                 }
             }
         }
-        if (maxU < 0 || maxW < 2.0) break;  // 无更多边可拆，或边太短
+        if (maxU < 0 || maxW < 2.0) break;
 
-        // 创建中点路口节点
         NodeInfo midNode;
         midNode.name  = QString::number(splitNodeId++);
         midNode.type  = "intersection";
@@ -213,13 +285,14 @@ inline void CampusGraph::buildGraph()
         midNode.lat   = (m_nodeList[maxU].lat + m_nodeList[maxV].lat) / 2.0;
         midNode.pixelX = (m_nodeList[maxU].pixelX + m_nodeList[maxV].pixelX) / 2.0;
         midNode.pixelY = (m_nodeList[maxU].pixelY + m_nodeList[maxV].pixelY) / 2.0;
+        midNode.floor = 0;
+        midNode.buildingId = 0;
 
         int midIdx = m_nodeList.size();
         m_nodeList.append(midNode);
         m_nodeIndexMap[midNode.name] = midIdx;
         ++m_nodeCount;
 
-        // 删除旧边 maxU-maxV（两边都要删）
         auto removeEdge = [](QVector<Edge>& vec, int target) {
             for (int k = 0; k < vec.size(); ++k) {
                 if (vec[k].to == target) { vec.removeAt(k); return; }
@@ -228,22 +301,16 @@ inline void CampusGraph::buildGraph()
         removeEdge(m_adj[maxU], maxV);
         removeEdge(m_adj[maxV], maxU);
 
-        // 计算两段新边的权重
         double w1 = haversineDistance(m_nodeList[maxU].lng, m_nodeList[maxU].lat,
                                        m_nodeList[midIdx].lng, m_nodeList[midIdx].lat);
         double w2 = haversineDistance(m_nodeList[midIdx].lng, m_nodeList[midIdx].lat,
                                        m_nodeList[maxV].lng, m_nodeList[maxV].lat);
 
-        // 为新节点创建邻接列表
         m_adj.append(QVector<Edge>());
-
-        // 添加两段新边
-        m_adj[maxU].push_back({midIdx, w1});
-        m_adj[midIdx].push_back({maxU, w1});
-        m_adj[midIdx].push_back({maxV, w2});
-        m_adj[maxV].push_back({midIdx, w2});
-
-        // 边数：删1加2，净+1
+        m_adj[maxU].push_back({midIdx, w1, maxCong, maxBike, maxShuttle});
+        m_adj[midIdx].push_back({maxU, w1, maxCong, maxBike, maxShuttle});
+        m_adj[midIdx].push_back({maxV, w2, maxCong, maxBike, maxShuttle});
+        m_adj[maxV].push_back({midIdx, w2, maxCong, maxBike, maxShuttle});
         ++m_edgeCount;
     }
 }
@@ -304,6 +371,56 @@ CampusGraph::dijkstra(int startIdx, int endIdx) const
     return {dist, prev};
 }
 
+inline CampusGraph::DijkstraResult
+CampusGraph::dijkstra(int startIdx, int endIdx, RouteStrategy strategy) const
+{
+    const double INF = std::numeric_limits<double>::infinity();
+    QVector<double> dist(m_nodeCount, INF);
+    QVector<int>    prev(m_nodeCount, -1);
+    QVector<bool>   visited(m_nodeCount, false);
+
+    dist[startIdx] = 0.0;
+
+    for (int i = 0; i < m_nodeCount; ++i) {
+        int    u       = -1;
+        double minDist = INF;
+        for (int j = 0; j < m_nodeCount; ++j) {
+            if (!visited[j] && dist[j] < minDist) {
+                minDist = dist[j];
+                u = j;
+            }
+        }
+        if (u == -1 || u == endIdx) break;
+        visited[u] = true;
+
+        for (const auto& edge : m_adj[u]) {
+            if (visited[edge.to]) continue;
+
+            // 策略过滤
+            if (strategy == BIKE_ONLY && !edge.allowBike) continue;
+            if (strategy == SHUTTLE   && !edge.isShuttle)  continue;
+
+            // 边权计算
+            double cost;
+            switch (strategy) {
+            case SHORTEST_TIME:
+                // 时间 = 距离 / 拥挤度（拥挤度越低越慢）
+                cost = edge.weight / edge.congestion;
+                break;
+            default:
+                cost = edge.weight;
+                break;
+            }
+
+            if (dist[u] + cost < dist[edge.to]) {
+                dist[edge.to] = dist[u] + cost;
+                prev[edge.to] = u;
+            }
+        }
+    }
+    return {dist, prev};
+}
+
 inline QVector<int> CampusGraph::reconstructPath(const QVector<int>& prev,
                                                   int startIdx,
                                                   int endIdx) const
@@ -344,6 +461,78 @@ inline QString CampusGraph::formatPathDisplay(const QVector<int>& indices) const
         names.append(m_nodeList[idx].name);
     }
     return names.join("  →  ");
+}
+
+inline MultiStopResult
+CampusGraph::findMultiStopRoute(int startIdx,
+                                 const QVector<int>& stopIndices) const
+{
+    MultiStopResult best;
+    best.totalDistance = std::numeric_limits<double>::infinity();
+
+    if (stopIndices.isEmpty()) return best;
+
+    // 1. 计算所有地点的两两最短距离（含起点）
+    QVector<int> allNodes;
+    allNodes.append(startIdx);
+    for (int s : stopIndices) allNodes.append(s);
+    int N = allNodes.size();
+
+    // distMatrix[i][j] = 从 allNodes[i] 到 allNodes[j] 的最短距离
+    QVector<QVector<double>> distMatrix(N, QVector<double>(N, -1));
+    QVector<QVector<QVector<int>>> pathMatrix(N,
+        QVector<QVector<int>>(N));
+
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            if (i == j) { distMatrix[i][j] = 0; continue; }
+            auto [d, p] = dijkstra(allNodes[i], allNodes[j]);
+            distMatrix[i][j] = d[allNodes[j]];
+            pathMatrix[i][j] = reconstructPath(p, allNodes[i], allNodes[j]);
+        }
+    }
+
+    // 2. 全排列枚举 K 个途经点的最优访问顺序（K ≤ 5）
+    QVector<int> perm;
+    for (int k = 1; k < N; ++k) perm.append(k);  // 1..N-1
+
+    do {
+        double total = 0;
+        total += distMatrix[0][perm[0]];  // 起点 → 第一个途经点
+        for (int i = 0; i < perm.size() - 1; ++i)
+            total += distMatrix[perm[i]][perm[i+1]];
+        total += distMatrix[perm.last()][0];  // 最后一个途经点 → 起点
+
+        if (total < best.totalDistance) {
+            best.totalDistance = total;
+            best.visitOrder = perm;
+        }
+    } while (std::next_permutation(perm.begin(), perm.end()));
+
+    // 3. 根据最优访问顺序拼接完整路径
+    if (best.visitOrder.isEmpty()) return best;
+
+    best.fullPath.clear();
+    // 起点 → 第一个途经点
+    best.fullPath.append(pathMatrix[0][best.visitOrder[0]]);
+    // 途经点之间
+    for (int i = 0; i < best.visitOrder.size() - 1; ++i) {
+        QVector<int> seg = pathMatrix[best.visitOrder[i]][best.visitOrder[i+1]];
+        if (!seg.isEmpty()) seg.removeFirst();  // 去重连接点
+        best.fullPath.append(seg);
+    }
+    // 最后一个途经点 → 返回起点
+    QVector<int> lastSeg = pathMatrix[best.visitOrder.last()][0];
+    if (!lastSeg.isEmpty()) lastSeg.removeFirst();
+    best.fullPath.append(lastSeg);
+
+    // 验证可达性
+    if (!std::isfinite(best.totalDistance)) {
+        best.fullPath.clear();
+        best.visitOrder.clear();
+    }
+
+    return best;
 }
 
 inline QVector<NodeInfo> CampusGraph::getLandmarks() const

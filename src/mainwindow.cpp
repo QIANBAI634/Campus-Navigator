@@ -410,7 +410,53 @@ QWidget* MainWindow::createNavigationPanel()
     endLayout->addWidget(m_endSelect, 1);
     layout->addWidget(endBox);
 
-    // ---- 按钮行：规划 + 完成导航 ----
+    // ---- 路线策略选择器 ----
+    QWidget* strategyBox = new QWidget();
+    strategyBox->setStyleSheet(
+        "background: #f8fafc; border-radius: 24px; padding: 8px 16px;"
+        "border: 1px solid #e2edf2;");
+    QHBoxLayout* strategyLayout = new QHBoxLayout(strategyBox);
+
+    QLabel* strategyLabel = new QLabel("🧭 策略");
+    strategyLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 16px; font-size:13px;");
+    strategyLayout->addWidget(strategyLabel);
+
+    m_strategySelect = new QComboBox();
+    m_strategySelect->addItems({"最短距离", "最短时间(含拥挤度)", "仅自行车道", "电瓶车路线"});
+    m_strategySelect->setStyleSheet(
+        "QComboBox { background: white; border: 1px solid #cbdde6;"
+        " border-radius: 20px; padding: 8px 14px; font-size: 13px; color: #1f2f38; }"
+        "QComboBox:hover { border-color: #2c7da0; }"
+        "QComboBox QAbstractItemView { background: white; color: #1f2f38;"
+        " selection-background-color: #e9f2f5; selection-color: #0a2b3e; }");
+    strategyLayout->addWidget(m_strategySelect, 1);
+
+    // 途经点按钮（添加到途经点列表）
+    m_addStopBtn = new QPushButton("📌 添加途经点");
+    m_addStopBtn->setStyleSheet(
+        "QPushButton { background: #e9f2f5; color: #1e4a6b; border: 1px solid #cbdde6;"
+        " border-radius: 20px; padding: 8px 16px; font-size: 12px; font-weight:600; }"
+        "QPushButton:hover { background: #d9e5f0; }");
+    m_addStopBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_addStopBtn, &QPushButton::clicked, this, &MainWindow::onAddStop);
+    strategyLayout->addWidget(m_addStopBtn);
+
+    layout->addWidget(strategyBox);
+
+    // 途经点列表
+    m_stopList = new QListWidget();
+    m_stopList->setMaximumHeight(72);
+    m_stopList->setStyleSheet(
+        "QListWidget { background: white; border: 1px solid #cbdde6;"
+        " border-radius: 14px; padding: 4px 8px; font-size: 12px; color: #1e4a6b; }"
+        "QListWidget::item { background: #e9f2f5; border-radius: 10px;"
+        " margin: 2px 0; padding: 2px 8px; }");
+    m_stopList->hide();
+    layout->addWidget(m_stopList);
+
+    // ---- 按钮行：规划 + 多点规划 + 完成导航 ----
     QHBoxLayout* btnLayout = new QHBoxLayout();
     btnLayout->setSpacing(12);
 
@@ -447,11 +493,38 @@ QWidget* MainWindow::createNavigationPanel()
         "QPushButton:pressed { background: #06293a; }"
     );
     m_finishBtn->setCursor(Qt::PointingHandCursor);
-    m_finishBtn->setEnabled(false);  // 初始没有导航路径，禁用
+    m_finishBtn->setEnabled(false);
     connect(m_finishBtn, &QPushButton::clicked, this, &MainWindow::onFinishNavigation);
     btnLayout->addWidget(m_finishBtn, 1);
 
     layout->addLayout(btnLayout);
+
+    // 途经点按钮行（在多主按钮下方）
+    QHBoxLayout* multiRow = new QHBoxLayout();
+    multiRow->setSpacing(8);
+
+    m_multiPlanBtn = new QPushButton("🗺️ 规划多点路径");
+    m_multiPlanBtn->setStyleSheet(
+        "QPushButton { background: #f59e0b; color: white; border: none;"
+        " border-radius: 24px; padding: 9px 16px; font-size: 12px; font-weight: 600; }"
+        "QPushButton:hover { background: #d97706; }");
+    m_multiPlanBtn->setCursor(Qt::PointingHandCursor);
+    m_multiPlanBtn->setEnabled(false);
+    connect(m_multiPlanBtn, &QPushButton::clicked, this, &MainWindow::onPlanMultiStop);
+    multiRow->addWidget(m_multiPlanBtn);
+
+    m_clearStopBtn = new QPushButton("清空途经点");
+    m_clearStopBtn->setStyleSheet(
+        "QPushButton { background: #fff2e6; color: #c2410c; border: 1px solid #fcd5ce;"
+        " border-radius: 24px; padding: 9px 14px; font-size: 12px; font-weight:600; }"
+        "QPushButton:hover { background: #ffe0cc; }");
+    m_clearStopBtn->setCursor(Qt::PointingHandCursor);
+    m_clearStopBtn->setEnabled(false);
+    connect(m_clearStopBtn, &QPushButton::clicked, this, &MainWindow::onClearStops);
+    multiRow->addWidget(m_clearStopBtn);
+    multiRow->addStretch();
+
+    layout->addLayout(multiRow);
 
     // ---- 地图组件 ----
     m_mapWidget = new MapWidget();
@@ -1265,8 +1338,16 @@ void MainWindow::onPlanRoute()
         return;
     }
 
-    // 执行 Dijkstra 算法
-    auto [dist, prev] = m_graph.dijkstra(startIdx, endIdx);
+    // 获取策略
+    RouteStrategy strategy = static_cast<RouteStrategy>(
+        m_strategySelect->currentIndex());
+
+    // 策略名称
+    static const char* stratNames[] = {"最短距离", "最短时间", "自行车道", "电瓶车"};
+    const char* stratName = stratNames[m_strategySelect->currentIndex()];
+
+    // 执行 Dijkstra 算法（带策略）
+    auto [dist, prev] = m_graph.dijkstra(startIdx, endIdx, strategy);
     double totalDist = dist[endIdx];
 
     if (!std::isfinite(totalDist)) {
@@ -1274,7 +1355,8 @@ void MainWindow::onPlanRoute()
         m_pathDisplay->setStyleSheet(
             "background:#fff2e6; color:#c2410c;"
             "border-radius:14px; padding:12px 16px; font-size:13px;");
-        m_pathDisplay->setText("🚫 路径不可达");
+        m_pathDisplay->setText(
+            QString("🚫 路径不可达 (%1策略)").arg(stratName));
         return;
     }
 
@@ -1286,13 +1368,16 @@ void MainWindow::onPlanRoute()
         return;
     }
 
-    // 过滤只显示地标
+    // 过滤并显示
     QVector<int> landmarkPath = m_graph.filterLandmarkPath(fullPath);
     QString displayStr = m_graph.formatPathDisplay(landmarkPath);
 
+    // 标签：区分距离/时间
+    QString metricLabel = (strategy == SHORTEST_TIME) ? "最短时间" : "最短距离";
+    QString metricUnit  = (strategy == SHORTEST_TIME) ? "s"       : "米";
     m_distanceLabel->setText(
-        QString("📏 最短距离: %1 米 (基于真实路网)")
-            .arg(static_cast<int>(totalDist)));
+        QString("📏 %1: %2 %3 (%4策略)")
+            .arg(metricLabel).arg(static_cast<int>(totalDist)).arg(metricUnit).arg(stratName));
 
     m_pathDisplay->setStyleSheet(
         "background:#fefce8; border-left:4px solid #1f6d49;"
@@ -1353,6 +1438,97 @@ void MainWindow::onFinishNavigation()
 {
     m_mapWidget->clearNavigationPath();
     m_finishBtn->setEnabled(false);
+    m_mapWidget->clearFacilityHighlights();
+}
+
+// ============================================================
+// 途经多点 + 添加/清空途经点
+// ============================================================
+
+void MainWindow::onAddStop()
+{
+    QString endName = m_endSelect->currentData().toString();
+    if (endName.isEmpty()) return;
+
+    int idx = m_graph.indexOf(endName);
+    if (idx < 0) return;
+
+    // 不能添加已在列表中的点
+    if (m_stopIndices.contains(idx)) return;
+
+    m_stopIndices.append(idx);
+    m_stopList->addItem(QString("📍 %1").arg(endName));
+    m_stopList->show();
+
+    // 启用/禁用按钮
+    m_multiPlanBtn->setEnabled(m_stopIndices.size() >= 1);
+    m_clearStopBtn->setEnabled(true);
+}
+
+void MainWindow::onClearStops()
+{
+    m_stopIndices.clear();
+    m_stopList->clear();
+    m_stopList->hide();
+    m_multiPlanBtn->setEnabled(false);
+    m_clearStopBtn->setEnabled(false);
+}
+
+void MainWindow::onPlanMultiStop()
+{
+    m_mapWidget->clearNavigationPath();
+    m_mapWidget->clearFacilityHighlights();
+    m_finishBtn->setEnabled(false);
+
+    if (m_stopIndices.isEmpty()) {
+        m_pathDisplay->setStyleSheet(
+            "background:#fff2e6; color:#c2410c;"
+            "border-radius:14px; padding:12px 16px; font-size:13px;");
+        m_pathDisplay->setText("❌ 请先添加途经点");
+        return;
+    }
+
+    QString startName = m_startSelect->currentData().toString();
+    if (startName.isEmpty()) {
+        m_pathDisplay->setText("❌ 请先选择起点");
+        return;
+    }
+
+    int startIdx = m_graph.indexOf(startName);
+    if (startIdx < 0) {
+        m_pathDisplay->setText("❌ 起点节点不存在");
+        return;
+    }
+
+    // 调用多点路径规划（TSP + 全排列）
+    MultiStopResult result = m_graph.findMultiStopRoute(startIdx, m_stopIndices);
+
+    if (result.fullPath.isEmpty() || !std::isfinite(result.totalDistance)) {
+        m_distanceLabel->setText("📏 多点路径: 不可达");
+        m_pathDisplay->setStyleSheet(
+            "background:#fff2e6; color:#c2410c;"
+            "border-radius:14px; padding:12px 16px; font-size:13px;");
+        m_pathDisplay->setText("🚫 无法规划途经多点的连通路径");
+        return;
+    }
+
+    // 过滤显示
+    QVector<int> landmarkPath = m_graph.filterLandmarkPath(result.fullPath);
+    QString displayStr = m_graph.formatPathDisplay(landmarkPath);
+
+    m_distanceLabel->setText(
+        QString("📏 多点路径: %1 米 (途经 %2 个景点)")
+            .arg(static_cast<int>(result.totalDistance))
+            .arg(m_stopIndices.size()));
+
+    m_pathDisplay->setStyleSheet(
+        "background:#fefce8; border-left:4px solid #f59e0b;"
+        "border-radius:14px; padding:12px 16px; font-size:13px; color:#1f2f38;");
+    m_pathDisplay->setText(QString("🗺️ %1").arg(displayStr));
+
+    // 绘制路径
+    m_mapWidget->drawNavigationPath(result.fullPath);
+    m_finishBtn->setEnabled(true);
 }
 
 // ============================================================
