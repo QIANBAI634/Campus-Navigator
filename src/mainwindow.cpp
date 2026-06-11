@@ -46,6 +46,21 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     applyGlobalStylesheet();
     populateSelectors();
+    // 初始化美食数据（首次运行从节点中生成默认数据）
+    if (FoodData::loadAll().isEmpty()) {
+        QVector<QString> foodNodes;
+        QMap<QString, QString> nodeFacMap;
+        const auto& nodes = m_graph.nodes();
+        for (const auto& n : nodes) {
+            if (n.facilityType == "餐饮" || n.facilityType == "教学") {
+                foodNodes.append(n.name);
+                nodeFacMap[n.name] = n.facilityType;
+            }
+        }
+        if (!foodNodes.isEmpty())
+            FoodData::regenerateAll(foodNodes, nodeFacMap);
+    }
+
     updateStats();
     updateWordCount();
     refreshDraftList();
@@ -99,6 +114,63 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         if (label && label->property("isDiaryLink").isValid()) {
             int idx = label->property("diaryIndex").toInt();
             if (idx >= 0) showDiaryDetail(idx);
+            return true;
+        }
+        // 美食列表点击 → 打开评分弹窗
+        if (label && label->property("isFoodLink").isValid()) {
+            int foodIdx = label->property("foodIndex").toInt();
+            QString curUid = m_userManager.currentUserId();
+            auto items = FoodData::loadAll();
+            if (foodIdx >= 0 && foodIdx < items.size()) {
+                const FoodItem& fi = items[foodIdx];
+                // 小评分弹窗（和日记详情一样：存盘即关）
+                QDialog* dlg = new QDialog(this);
+                dlg->setWindowTitle(QString("⭐ %1").arg(fi.name));
+                dlg->resize(380, 200);
+                dlg->setStyleSheet("QDialog { background: #f8fafc; }");
+                QVBoxLayout* dl = new QVBoxLayout(dlg);
+                dl->setSpacing(10);
+
+                QLabel* info = new QLabel(
+                    QString("%1 · %2\n当前评分: %3 (%4人评)")
+                        .arg(fi.name).arg(fi.cuisine)
+                        .arg(fi.avgRating(), 0, 'f', 1).arg(fi.ratingCount()));
+                info->setStyleSheet("font-size:14px; color:#1e4a6b;");
+                info->setAlignment(Qt::AlignCenter);
+                dl->addWidget(info);
+
+                QHBoxLayout* starRow = new QHBoxLayout();
+                starRow->addStretch();
+                for (int s = 1; s <= 5; ++s) {
+                    QPushButton* sb = new QPushButton(QChar(0x2605));
+                    sb->setFixedSize(44, 44);
+                    sb->setCursor(Qt::PointingHandCursor);
+                    int cr = fi.getUserRating(curUid);
+                    sb->setStyleSheet(QString(
+                        "QPushButton { background:transparent;"
+                        " border:2px solid %1; border-radius:8px;"
+                        " font-size:26px; color:%1; }"
+                        "QPushButton:hover { background:#fff8e0;"
+                        " border-color:#f59e0b; color:#f59e0b; font-size:30px; }"
+                    ).arg((cr > 0 && s <= cr) ? "#f59e0b" : "#d0d0d0"));
+                    connect(sb, &QPushButton::clicked, dlg,
+                        [dlg, foodIdx, curUid, s]() {
+                            FoodData::setRating(foodIdx, curUid, s);
+                            dlg->accept();
+                        });
+                    starRow->addWidget(sb);
+                }
+                starRow->addStretch();
+                dl->addLayout(starRow);
+
+                QLabel* tip = new QLabel("评分后弹窗关闭，重新搜索即可看到更新");
+                tip->setStyleSheet("font-size:11px; color:#7f9aaa;");
+                tip->setAlignment(Qt::AlignCenter);
+                dl->addWidget(tip);
+
+                dlg->exec();
+                dlg->deleteLater();
+            }
             return true;
         }
     }
@@ -387,6 +459,7 @@ QWidget* MainWindow::createPageRecommend()
     QVBoxLayout* layout = new QVBoxLayout(page);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createRecommendPanel());
+    layout->addWidget(createFoodPanel());
     layout->addStretch();
 
     sa->setWidget(page);
@@ -1891,6 +1964,261 @@ void MainWindow::onQueryNearbyFacilities()
 
     // 在查询地图上高亮
     if (m_searchMapWidget) m_searchMapWidget->highlightFacilities(highlightIndices);
+}
+
+// ============================================================
+// 美食推荐面板
+// ============================================================
+
+QWidget* MainWindow::createFoodPanel()
+{
+    QWidget* panel = new QWidget();
+    panel->setStyleSheet(
+        "background: #f8fafc;"
+        "border-radius: 24px;"
+        "padding: 20px;"
+        "margin: 12px 28px;"
+        "border: 1px solid #e2edf2;"
+    );
+    QVBoxLayout* layout = new QVBoxLayout(panel);
+    layout->setSpacing(12);
+
+    QLabel* title = new QLabel("🍔 美食推荐");
+    title->setStyleSheet("font-size:16px; font-weight:700; color:#0f5b7a; background:transparent;");
+    layout->addWidget(title);
+
+    // 第一行：排序 + 菜系过滤
+    QHBoxLayout* row1 = new QHBoxLayout();
+    row1->setSpacing(10);
+
+    QLabel* sortLabel = new QLabel("排序");
+    sortLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 12px; font-size:12px;");
+    row1->addWidget(sortLabel);
+
+    m_foodSortSelect = new QComboBox();
+    m_foodSortSelect->addItems({"按热度", "按评分"});
+    m_foodSortSelect->setMaximumWidth(110);
+    row1->addWidget(m_foodSortSelect);
+
+    QLabel* cuiLabel = new QLabel("菜系");
+    cuiLabel->setStyleSheet(
+        "font-weight:600; color:#1e4a6b; background:#e9f2f5;"
+        "border-radius:20px; padding:6px 12px; font-size:12px;");
+    row1->addWidget(cuiLabel);
+
+    m_foodCuisineSelect = new QComboBox();
+    m_foodCuisineSelect->addItem("全部");
+    m_foodCuisineSelect->addItems(FoodData::allCuisineNames());
+    m_foodCuisineSelect->setMaximumWidth(130);
+    row1->addWidget(m_foodCuisineSelect);
+
+    row1->addStretch();
+
+    m_foodTopKBtn = new QPushButton("🏆 Top-10 美食");
+    m_foodTopKBtn->setStyleSheet(
+        "QPushButton { background:#1f6d49; color:white; border:none;"
+        " border-radius: 20px; padding: 10px 16px; font-size: 13px; font-weight:600; }"
+        "QPushButton:hover { background:#0e5437; }");
+    m_foodTopKBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_foodTopKBtn, &QPushButton::clicked, this, &MainWindow::onFoodTopK);
+    row1->addWidget(m_foodTopKBtn);
+    layout->addLayout(row1);
+
+    // 第二行：搜索 + 添加菜品
+    QHBoxLayout* row2 = new QHBoxLayout();
+    row2->setSpacing(10);
+
+    QLabel* schLabel = new QLabel("🔎");
+    schLabel->setStyleSheet("font-size:14px; background:transparent;");
+    row2->addWidget(schLabel);
+
+    m_foodSearchInput = new QLineEdit();
+    m_foodSearchInput->setPlaceholderText("搜索美食/菜系/地点...");
+    m_foodSearchInput->setStyleSheet(
+        "QLineEdit { background:white; border:1px solid #cbdde6;"
+        " border-radius: 20px; padding: 8px 14px; font-size: 13px; color:#1f2f38; }"
+        "QLineEdit:focus { border-color: #0f5b7a; }");
+    row2->addWidget(m_foodSearchInput, 1);
+
+    QPushButton* searchBtn = new QPushButton("搜索");
+    searchBtn->setStyleSheet(
+        "QPushButton { background:#0f5b7a; color:white; border:none;"
+        " border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight:600; }"
+        "QPushButton:hover { background:#0a3d52; }");
+    searchBtn->setCursor(Qt::PointingHandCursor);
+    connect(searchBtn, &QPushButton::clicked, this, &MainWindow::onFoodSearch);
+    row2->addWidget(searchBtn);
+
+    m_foodAddBtn = new QPushButton("＋添加菜品");
+    m_foodAddBtn->setStyleSheet(
+        "QPushButton { background:#f59e0b; color:white; border:none;"
+        " border-radius: 20px; padding: 8px 14px; font-size: 12px; font-weight:600; }"
+        "QPushButton:hover { background:#d97706; }");
+    m_foodAddBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_foodAddBtn, &QPushButton::clicked, this, &MainWindow::onFoodAdd);
+    row2->addWidget(m_foodAddBtn);
+    layout->addLayout(row2);
+
+    // 结果标题
+    m_foodResultLabel = new QLabel("🍽️ 点「Top-10 美食」查看推荐，或搜索美食");
+    m_foodResultLabel->setWordWrap(true);
+    m_foodResultLabel->setStyleSheet(
+        "background: #fefce8; border-left: 4px solid #1f6d49;"
+        "border-radius: 14px; padding: 10px 16px; font-size: 13px; color: #1f2f38;");
+    layout->addWidget(m_foodResultLabel);
+
+    QWidget* rc = new QWidget();
+    rc->setStyleSheet("background: transparent;");
+    m_foodResultLayout = new QVBoxLayout(rc);
+    m_foodResultLayout->setContentsMargins(0, 0, 0, 0);
+    m_foodResultLayout->setSpacing(4);
+    layout->addWidget(rc);
+
+    return panel;
+}
+
+// ============================================================
+// 美食推荐槽函数
+// ============================================================
+
+void MainWindow::onFoodTopK()
+{
+    onFoodSearch();  // Top-10 = 无搜索词的查询
+}
+
+void MainWindow::onFoodSearch()
+{
+    QLayoutItem* child;
+    while ((child = m_foodResultLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+
+    auto items = FoodData::loadAll();
+    if (items.isEmpty()) {
+        m_foodResultLabel->setText("📭 暂无美食数据");
+        return;
+    }
+
+    bool byHeat = (m_foodSortSelect->currentText() == "按热度");
+    QString cuisine = m_foodCuisineSelect->currentText();
+    if (cuisine == "全部") cuisine.clear();
+    QString kw = m_foodSearchInput->text().trimmed();
+
+    auto top = FoodData::topK(items, 10, byHeat, cuisine, kw);
+    if (top.isEmpty()) {
+        m_foodResultLabel->setText("📭 无匹配结果");
+        return;
+    }
+
+    m_foodResultLabel->setText(
+        QString("🍽️ Top-%1 · 按%2%3%4")
+            .arg(top.size())
+            .arg(byHeat ? "热度" : "评分")
+            .arg(cuisine.isEmpty() ? "" : " · " + cuisine)
+            .arg(kw.isEmpty() ? "" : " · "" + kw + """));
+
+    for (int i = 0; i < top.size(); ++i) {
+        QString html = QString(
+            "<table width='100%' cellspacing='0' cellpadding='3'>"
+            "<tr>"
+            "<td width='26' align='center' style='font-weight:700;'>%1</td>"
+            "<td align='left' style='font-weight:600; color:#1e4a6b;'>%2</td>"
+            "<td align='left' style='color:#7f9aaa; font-size:11px;'>%3 · %4</td>"
+            "<td width='50' align='right' style='color:#f59e0b;'>⭐%5</td>"
+            "</tr></table>"
+        ).arg(i+1).arg(top[i].name.toHtmlEscaped())
+         .arg(top[i].cuisine).arg(top[i].location)
+         .arg(top[i].avgRating(), 0, 'f', 1);
+
+        QLabel* label = new QLabel(html);
+        label->setTextFormat(Qt::RichText);
+        label->setCursor(Qt::PointingHandCursor);
+        label->setStyleSheet(
+            "QLabel { background:white; border:1px solid #e2edf2;"
+            " border-radius:10px; padding:4px 10px; }"
+            "QLabel:hover { background:#fff8e0; border-color:#f59e0b; }");
+        label->setToolTip("点击评分");
+
+        // 找到该食物在 items 中的索引（用于评分）
+        int foodIdx = i;
+        // 需要重新定位，因为 topK 返回的子集顺序变了
+        for (int j = 0; j < items.size(); ++j) {
+            if (items[j].name == top[i].name &&
+                items[j].cuisine == top[i].cuisine &&
+                items[j].location == top[i].location) {
+                foodIdx = j; break;
+            }
+        }
+
+        label->installEventFilter(this);
+        label->setProperty("foodIndex", foodIdx);
+        label->setProperty("isFoodLink", true);
+        m_foodResultLayout->addWidget(label);
+    }
+}
+
+void MainWindow::onFoodRate(int index, int score)
+{
+    // 存盘即关闭模式（和日记评分一样安全）
+    QString curUid = m_userManager.currentUserId();
+    FoodData::setRating(index, curUid, score);
+}
+
+void MainWindow::onFoodAdd()
+{
+    // 小弹窗：选菜系 + 输入名称
+    QDialog* dlg = new QDialog(this);
+    dlg->setWindowTitle("＋添加菜品");
+    dlg->resize(360, 200);
+    dlg->setStyleSheet("QDialog { background: #f8fafc; }");
+
+    QVBoxLayout* dl = new QVBoxLayout(dlg);
+    dl->setSpacing(12);
+
+    QLabel* info = new QLabel("选择菜系并输入新菜品名称：");
+    info->setStyleSheet("font-size:13px; color:#1e4a6b;");
+    dl->addWidget(info);
+
+    QComboBox* cuiBox = new QComboBox();
+    cuiBox->addItems(FoodData::allCuisineNames());
+    dl->addWidget(cuiBox);
+
+    QLineEdit* nameInput = new QLineEdit();
+    nameInput->setPlaceholderText("输入菜品名称...");
+    nameInput->setStyleSheet(
+        "QLineEdit { background:white; border:1px solid #cbdde6;"
+        " border-radius: 14px; padding: 8px 14px; font-size: 14px; }");
+    dl->addWidget(nameInput);
+
+    QHBoxLayout* btnRow = new QHBoxLayout();
+    QPushButton* cancel = new QPushButton("取消");
+    cancel->setStyleSheet(
+        "QPushButton { background:white; color:#5e7a8c; border:1px solid #cbdde6;"
+        " border-radius: 16px; padding: 8px 20px; font-size:13px; }");
+    connect(cancel, &QPushButton::clicked, dlg, &QDialog::reject);
+    btnRow->addWidget(cancel);
+
+    QPushButton* ok = new QPushButton("添加");
+    ok->setStyleSheet(
+        "QPushButton { background:#1f6d49; color:white; border:none;"
+        " border-radius: 16px; padding: 8px 24px; font-size:13px; font-weight:600; }");
+    btnRow->addWidget(ok);
+    dl->addLayout(btnRow);
+
+    connect(ok, &QPushButton::clicked, dlg, [dlg, cuiBox, nameInput]() {
+        QString name    = nameInput->text().trimmed();
+        QString cuisine = cuiBox->currentText();
+        if (name.isEmpty()) return;
+        // 添加到一个通用节点（"美食广场"表示用户自定义）
+        FoodData::addUserFood(name, cuisine, "用户推荐");
+        dlg->accept();
+    });
+
+    dlg->exec();
+    dlg->deleteLater();
 }
 
 void MainWindow::onCampusChanged(int index)

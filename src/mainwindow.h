@@ -31,6 +31,7 @@
 #include "mapwidget.h"
 #include "campusdatabase.h"
 #include "usermanager.h"
+#include "fooddatabase.h"
 
 class MainWindow : public QMainWindow
 {
@@ -63,6 +64,12 @@ private slots:
     void onRecommendTop();
     void onSearchCampus();
 
+    // ========== 美食推荐 ==========
+    void onFoodTopK();               // 美食 Top-10
+    void onFoodSearch();             // 美食搜索
+    void onFoodRate(int index, int score); // 美食评分
+    void onFoodAdd();                // 添加菜品
+
     // ========== 日记相关 ==========
     void onCategoryChanged();
     void onTextChanged();
@@ -91,6 +98,7 @@ private:
     QWidget* createNavigationPanel();
     QWidget* createDiarySearchPanel();    // 日记搜索/推荐面板
     QWidget* createRecommendPanel();
+    QWidget* createFoodPanel();          // 美食推荐面板
     QWidget* createNearbyFacilityPanel();
     QWidget* createDiaryPanel();
     QWidget* createDraftListPanel();
@@ -150,6 +158,15 @@ private:
     QPushButton*   m_recSearchBtn;
     QLabel*        m_recResultLabel;
     QVBoxLayout*   m_recResultLayout;
+
+    // ========== 美食推荐 UI 元素 ==========
+    QComboBox*     m_foodSortSelect = nullptr;
+    QComboBox*     m_foodCuisineSelect = nullptr;
+    QLineEdit*     m_foodSearchInput = nullptr;
+    QPushButton*   m_foodTopKBtn = nullptr;
+    QPushButton*   m_foodAddBtn = nullptr;
+    QLabel*        m_foodResultLabel = nullptr;
+    QVBoxLayout*   m_foodResultLayout = nullptr;
 
     // ========== 场所查询 UI 元素 ==========
     QComboBox*     m_facilityCenterSelect;
