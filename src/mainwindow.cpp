@@ -2071,11 +2071,12 @@ void MainWindow::onFoodSearch()
             "<td width='26' align='center' style='font-weight:700;'>%1</td>"
             "<td align='left' style='font-weight:600; color:#1e4a6b;'>%2</td>"
             "<td align='left' style='color:#7f9aaa; font-size:11px;'>%3 · %4</td>"
-            "<td width='50' align='right' style='color:#f59e0b;'>⭐%5</td>"
+            "<td width='68' align='right' style='color:#f59e0b;'>⭐%5 (%6人)</td>"
             "</tr></table>"
         ).arg(i+1).arg(top[i].name.toHtmlEscaped())
          .arg(top[i].cuisine).arg(top[i].location)
-         .arg(top[i].avgRating(), 0, 'f', 1);
+         .arg(top[i].avgRating(), 0, 'f', 1)
+         .arg(top[i].ratingCount());
 
         QLabel* label = new QLabel(html);
         label->setTextFormat(Qt::RichText);
