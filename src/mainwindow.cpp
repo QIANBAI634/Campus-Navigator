@@ -828,8 +828,7 @@ QVector<CampusInfo> topKCampuses(const QVector<CampusInfo>& src, int k,
         std::swap(heap[0], heap[i]);
         heapSiftDown(heap, 0, i, sortByHeat);
     }
-    // 现在 heap 是从最小到最大，反转
-    std::reverse(heap.begin(), heap.end());
+    // 小顶堆提取出的序列天然是降序，无需反转
     return heap;
 }
 
@@ -1245,14 +1244,14 @@ QWidget* MainWindow::createDiarySearchPanel()
     row3->setSpacing(6);
 
     m_diarySearchTitleInput = new QLineEdit();
-    m_diarySearchTitleInput->setPlaceholderText("输入完整日记标题...");
+    m_diarySearchTitleInput->setPlaceholderText("输入日记开头内容...");
     m_diarySearchTitleInput->setStyleSheet(
         "QLineEdit { background:white; border:1px solid #cbdde6;"
         " border-radius: 16px; padding: 6px 12px; font-size: 12px; color:#1f2f38; }"
         "QLineEdit:focus { border-color: #0f5b7a; }");
     row3->addWidget(m_diarySearchTitleInput, 1);
 
-    m_diarySearchTitleBtn = new QPushButton("🔍 查标题");
+    m_diarySearchTitleBtn = new QPushButton("🔍 精确查找");
     m_diarySearchTitleBtn->setStyleSheet(
         "QPushButton { background:#f59e0b; color:white; border:none;"
         " border-radius: 16px; padding: 6px 14px; font-size: 12px; font-weight:600; }"
@@ -1263,7 +1262,7 @@ QWidget* MainWindow::createDiarySearchPanel()
     layout->addLayout(row3);
 
     // 结果标签
-    m_diarySearchResultLabel = new QLabel("💡 Top-K排行 / 目的地搜索 / 标题精确查找");
+    m_diarySearchResultLabel = new QLabel("💡 Top-K排行 / 目的地搜索 / 精确前缀查找");
     m_diarySearchResultLabel->setWordWrap(true);
     m_diarySearchResultLabel->setStyleSheet(
         "background: #fefce8; border-left: 4px solid #1f6d49;"
@@ -1300,16 +1299,6 @@ QWidget* MainWindow::createDiaryPanel()
     QLabel* title = new QLabel("📝 旅行日记");
     title->setStyleSheet("font-size:16px; font-weight:700; color:#0f5b7a;");
     layout->addWidget(title);
-
-    // 日记标题输入框
-    m_diaryTitleInput = new QLineEdit();
-    m_diaryTitleInput->setPlaceholderText("输入日记标题（用于搜索）");
-    m_diaryTitleInput->setStyleSheet(
-        "QLineEdit { background: white; border: 1px solid #cbdde6;"
-        " border-radius: 14px; padding: 8px 14px; font-size: 14px;"
-        " font-weight: 600; color: #1e4a6b; }"
-        "QLineEdit:focus { border-color: #0f5b7a; }");
-    layout->addWidget(m_diaryTitleInput);
 
     // 分类按钮 — 2行3列网格布局，确保每个按钮足够宽
     QGridLayout* catLayout = new QGridLayout();
@@ -1955,7 +1944,6 @@ void MainWindow::onTextChanged()
 void MainWindow::onSaveDraft()
 {
     // 确保内容同步
-    m_currentDiary.title   = m_diaryTitleInput->text().trimmed();
     m_currentDiary.content = m_diaryTextarea->toPlainText();
     m_currentDiary.createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
     m_currentDiary.id = QDateTime::currentMSecsSinceEpoch();
@@ -1972,7 +1960,6 @@ void MainWindow::onSaveDraft()
         m_currentDiary.id = QDateTime::currentMSecsSinceEpoch();
         m_currentDiary.category = DiaryCategory::TRAVEL_NOTE;
         m_currentDiary.userId = "current_user";
-        m_diaryTitleInput->clear();
         m_diaryTextarea->clear();
         if (!m_categoryBtns.isEmpty()) {
             m_categoryBtns[0]->setChecked(true);
@@ -2027,7 +2014,6 @@ void MainWindow::onLoadDraft(int index)
     if (index < 0 || index >= drafts.size()) return;
 
     m_currentDiary = drafts[index];
-    m_diaryTitleInput->setText(m_currentDiary.title);
     m_diaryTextarea->setPlainText(m_currentDiary.content);
 
     // 设置分类按钮
@@ -2495,7 +2481,7 @@ void MainWindow::onRecommendDiaries()
         QString("🏆 %1 Top-5").arg(byHeat ? "热度" : "评分"));
 
     for (int i = 0; i < top.size(); ++i) {
-        QString ttl = top[i].title.isEmpty() ? "(无标题)" : top[i].title;
+        QString ttl = top[i].preview();
         QString html = QString(
             "<table width='100%' cellspacing='0' cellpadding='3'>"
             "<tr>"
@@ -2546,7 +2532,7 @@ void MainWindow::onSearchDiaryDest()
         QString("📍 找到 %1 条目的地含「%2」的日记").arg(results.size()).arg(kw));
 
     for (int i = 0; i < results.size(); ++i) {
-        QString ttl = results[i].title.isEmpty() ? "(无标题)" : results[i].title;
+        QString ttl = results[i].preview();
         QString html = QString(
             "<table width='100%' cellspacing='0' cellpadding='3'>"
             "<tr>"

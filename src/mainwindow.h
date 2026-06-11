@@ -161,7 +161,6 @@ private:
     int            m_activeCenterIdx;
 
     // ========== 日记 UI 元素 ==========
-    QLineEdit*     m_diaryTitleInput = nullptr;
     QVector<QPushButton*> m_categoryBtns;
     QTextEdit*     m_diaryTextarea;
     QLabel*        m_diaryStatus;

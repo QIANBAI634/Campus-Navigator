@@ -212,7 +212,7 @@ QVector<DiaryEntry> DiaryManager::topKDiaries(const QVector<DiaryEntry>& src,
         std::swap(heap[0], heap[i]);
         diaryHeapSiftDown(heap, 0, i, byHeat);
     }
-    std::reverse(heap.begin(), heap.end());
+    // 小顶堆提取已得降序，无需反转
     return heap;
 }
 
@@ -246,11 +246,12 @@ QVector<DiaryEntry> DiaryManager::searchByDestination(
 int DiaryManager::findDiaryByTitle(const QVector<DiaryEntry>& src,
                                      const QString& title)
 {
-    // 构建 QHash 索引 → O(1) 查找
-    QHash<QString, int> index;
+    // 精确匹配内容前缀（O(n)，数据量小时足够高效）
+    QString q = title.trimmed();
     for (int i = 0; i < src.size(); ++i)
-        index[src[i].title] = i;
-    return index.value(title.trimmed(), -1);
+        if (src[i].content.trimmed().startsWith(q))
+            return i;
+    return -1;
 }
 
 // ========== 图片管理 ==========

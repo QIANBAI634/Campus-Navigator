@@ -111,7 +111,6 @@ struct PhotoAttachment {
 // ============================================================
 struct DiaryEntry {
     qint64                  id;             // 唯一标识（时间戳）
-    QString                 title;          // 日记标题
     QString                 content;        // 日记文本内容
     QString                 category;       // 分类
     QString                 campusName;     // 当前景区/校园名称
@@ -149,16 +148,15 @@ struct DiaryEntry {
         return userRatings.value(uid, 0);
     }
 
-    // 获取预览文本（前50个字符）
+    // 获取预览文本：≤8字全文，>8字取前6字+...
     QString preview() const {
-        if (content.length() <= 50) return content;
-        return content.left(50) + "...";
+        if (content.length() <= 8) return content;
+        return content.left(6) + "...";
     }
 
     QJsonObject toJson() const {
         QJsonObject obj;
         obj["id"]         = id;
-        obj["title"]      = title;
         obj["content"]    = content;
         obj["category"]   = category;
         obj["campusName"] = campusName;
@@ -194,7 +192,6 @@ struct DiaryEntry {
     static DiaryEntry fromJson(const QJsonObject& obj) {
         DiaryEntry entry;
         entry.id           = static_cast<qint64>(obj["id"].toDouble());
-        entry.title        = obj["title"].toString();
         entry.content      = obj["content"].toString();
         entry.category     = obj["category"].toString();
         entry.campusName   = obj["campusName"].toString();
