@@ -2285,53 +2285,61 @@ void MainWindow::refreshFoodStars()
 
 void MainWindow::onFoodRateLocationChanged()
 {
-    disconnect(m_foodRateCuisineSelect, nullptr, this, nullptr);
+    m_foodRateCuisineSelect->blockSignals(true);
     m_foodRateCuisineSelect->clear();
 
     QString loc = m_foodRateLocSelect->currentText();
     if (loc.isEmpty() || loc.startsWith("——")) {
         m_foodRateCuisineSelect->addItem("—— 先选地标 ——");
         m_foodRateCuisineSelect->setEnabled(false);
-        return;
+    } else {
+        int idx = m_graph.indexOf(loc);
+        if (idx >= 0) {
+            QString ft = m_graph.nodes()[idx].facilityType;
+            QStringList cuisines = cuisinesForFacility(ft);
+            m_foodRateCuisineSelect->addItem("—— 选菜系 ——");
+            for (const auto& c : cuisines)
+                m_foodRateCuisineSelect->addItem(c);
+            m_foodRateCuisineSelect->setEnabled(true);
+        }
     }
+    m_foodRateCuisineSelect->blockSignals(false);
 
-    // 查该节点的 facilityType → 获取菜系列表
-    int idx = m_graph.indexOf(loc);
-    if (idx < 0) return;
-    QString ft = m_graph.nodes()[idx].facilityType;
-    QStringList cuisines = cuisinesForFacility(ft);
-    m_foodRateCuisineSelect->addItem("—— 选菜系 ——");
-    for (const auto& c : cuisines)
-        m_foodRateCuisineSelect->addItem(c);
-    m_foodRateCuisineSelect->setEnabled(true);
+    // 同时清空美食下拉框
+    m_foodRateFoodSelect->blockSignals(true);
+    m_foodRateFoodSelect->clear();
+    m_foodRateFoodSelect->addItem("—— 先选菜系 ——");
+    m_foodRateFoodSelect->setEnabled(false);
+    m_foodRateFoodSelect->blockSignals(false);
+    refreshFoodStars();
 }
 
 void MainWindow::onFoodRateCuisineChanged()
 {
-    disconnect(m_foodRateFoodSelect, nullptr, this, nullptr);
+    m_foodRateFoodSelect->blockSignals(true);
     m_foodRateFoodSelect->clear();
 
     QString cuisine = m_foodRateCuisineSelect->currentText();
     if (cuisine.isEmpty() || cuisine.startsWith("——")) {
         m_foodRateFoodSelect->addItem("—— 先选菜系 ——");
         m_foodRateFoodSelect->setEnabled(false);
-        return;
-    }
+    } else {
+        auto all = FoodData::loadAll();
+        QString loc = m_foodRateLocSelect->currentText();
+        QStringList names;
+        for (const auto& f : all) {
+            if (f.cuisine == cuisine && f.location == loc)
+                names.append(f.name);
+        }
+        names.removeDuplicates();
 
-    // 从 foods.json 中筛选该菜系的美食
-    auto all = FoodData::loadAll();
-    QString loc = m_foodRateLocSelect->currentText();
-    QStringList names;
-    for (const auto& f : all) {
-        if (f.cuisine == cuisine && f.location == loc)
-            names.append(f.name);
+        m_foodRateFoodSelect->addItem("—— 选美食 ——");
+        for (const auto& n : names)
+            m_foodRateFoodSelect->addItem(n);
+        m_foodRateFoodSelect->setEnabled(!names.isEmpty());
     }
-    names.removeDuplicates();
-
-    m_foodRateFoodSelect->addItem("—— 选美食 ——");
-    for (const auto& n : names)
-        m_foodRateFoodSelect->addItem(n);
-    m_foodRateFoodSelect->setEnabled(!names.isEmpty());
+    m_foodRateFoodSelect->blockSignals(false);
+    refreshFoodStars();
 }
 
 void MainWindow::onFoodRating(int score)
