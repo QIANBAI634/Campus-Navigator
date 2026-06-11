@@ -1374,6 +1374,7 @@ void MainWindow::populateSelectors()
 
 void MainWindow::updateStats()
 {
+    if (!m_statsLabel) return;  // 重构后 stats 可能尚未绑定 UI
     m_statsLabel->setText(
         QString("📍 地标 %1     🔗 路段 %2")
             .arg(m_graph.landmarkCount())
