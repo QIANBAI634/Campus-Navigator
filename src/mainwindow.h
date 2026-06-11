@@ -134,6 +134,7 @@ private:
     QListWidget*   m_stopList;
     QVector<int>   m_stopIndices;
     MapWidget*     m_mapWidget;
+    MapWidget*     m_searchMapWidget = nullptr;  // 查询页独立地图
     QLabel*        m_distanceLabel;
     QLabel*        m_pathDisplay;
 

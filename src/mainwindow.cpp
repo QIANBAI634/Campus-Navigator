@@ -343,14 +343,25 @@ QWidget* MainWindow::createBottomBar()
 
 QWidget* MainWindow::createPageNavigation()
 {
-    // 导航页面不包裹 QScrollArea（内含 QGraphicsView 已可滚动）
+    QScrollArea* sa = new QScrollArea();
+    sa->setWidgetResizable(true);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { background: #f0f4f9; width: 8px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical { background: #cbdde6; border-radius: 4px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }");
+
     QWidget* page = new QWidget();
     page->setStyleSheet("background: #d9e2ec;");
     QVBoxLayout* layout = new QVBoxLayout(page);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(createNavigationPanel());
     layout->addStretch();
-    return page;
+
+    sa->setWidget(page);
+    return sa;
 }
 
 QWidget* MainWindow::createPageRecommend()
@@ -392,6 +403,23 @@ QWidget* MainWindow::createPageSearch()
     page->setStyleSheet("background: #d9e2ec;");
     QVBoxLayout* layout = new QVBoxLayout(page);
     layout->setContentsMargins(8, 8, 8, 8);
+
+    // 查询地图 — 独立于导航地图
+    m_searchMapWidget = new MapWidget();
+    m_searchMapWidget->setGraph(&m_graph);
+    QStringList mapPaths = {
+        QApplication::applicationDirPath() + "/assets/北邮校园地图.jpg",
+        QApplication::applicationDirPath() + "/../assets/北邮校园地图.jpg",
+        QApplication::applicationDirPath() + "/../../assets/北邮校园地图.jpg",
+    };
+    for (const QString& path : mapPaths) {
+        if (m_searchMapWidget->loadMap(path)) break;
+    }
+    m_searchMapWidget->placeLandmarkDots();
+    m_searchMapWidget->setMinimumHeight(280);
+    layout->addWidget(m_searchMapWidget);
+
+    // 设施查询面板
     layout->addWidget(createNearbyFacilityPanel());
     layout->addStretch();
 
@@ -622,6 +650,7 @@ QWidget* MainWindow::createNavigationPanel()
         if (m_mapWidget->loadMap(path)) break;
     }
     m_mapWidget->placeLandmarkDots();
+    m_mapWidget->setMinimumHeight(320);   // 固定地图最小高度，避免被挤压
     layout->addWidget(m_mapWidget);
 
     // ---- "显示标签类型" 按钮 (地图右下角浮层风格) ----
@@ -1622,7 +1651,7 @@ void MainWindow::onPlanMultiStop()
 void MainWindow::onQueryNearbyFacilities()
 {
     // 清除上次的高亮
-    m_mapWidget->clearFacilityHighlights();
+    if (m_searchMapWidget) m_searchMapWidget->clearFacilityHighlights();
 
     // 清空上次结果
     QLayoutItem* child;
@@ -1735,8 +1764,8 @@ void MainWindow::onQueryNearbyFacilities()
         m_nearbyResultLayout->addWidget(row);
     }
 
-    // 在地图上高亮
-    m_mapWidget->highlightFacilities(highlightIndices);
+    // 在查询地图上高亮
+    if (m_searchMapWidget) m_searchMapWidget->highlightFacilities(highlightIndices);
 }
 
 void MainWindow::onCampusChanged(int index)
