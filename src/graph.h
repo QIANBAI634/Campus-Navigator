@@ -57,6 +57,7 @@ struct MultiStopResult {
     QVector<int> fullPath;      // 完整路径
     QVector<int> visitOrder;    // 途经点在路径中的顺序（索引）
     double       totalDistance; // 总距离（米）
+    bool         optimal = true; // true=最短路线枚举, false=按添加顺序
 };
 
 /**
@@ -157,7 +158,8 @@ public:
      * @return 完整路径 + 访问顺序 + 总距离
      */
     MultiStopResult findMultiStopRoute(int startIdx,
-                                       const QVector<int>& stopIndices) const;
+                                       const QVector<int>& stopIndices,
+                                       bool sequential = false) const;
 
 private:
     QVector<NodeInfo>           m_nodeList;       // 所有节点
@@ -465,12 +467,14 @@ inline QString CampusGraph::formatPathDisplay(const QVector<int>& indices) const
 
 inline MultiStopResult
 CampusGraph::findMultiStopRoute(int startIdx,
-                                 const QVector<int>& stopIndices) const
+                                 const QVector<int>& stopIndices,
+                                 bool sequential) const
 {
-    MultiStopResult best;
-    best.totalDistance = std::numeric_limits<double>::infinity();
+    MultiStopResult result;
+    result.optimal = !sequential;
+    result.totalDistance = std::numeric_limits<double>::infinity();
 
-    if (stopIndices.isEmpty()) return best;
+    if (stopIndices.isEmpty()) return result;
 
     // 1. 计算所有地点的两两最短距离（含起点）
     QVector<int> allNodes;
@@ -478,7 +482,6 @@ CampusGraph::findMultiStopRoute(int startIdx,
     for (int s : stopIndices) allNodes.append(s);
     int N = allNodes.size();
 
-    // distMatrix[i][j] = 从 allNodes[i] 到 allNodes[j] 的最短距离
     QVector<QVector<double>> distMatrix(N, QVector<double>(N, -1));
     QVector<QVector<QVector<int>>> pathMatrix(N,
         QVector<QVector<int>>(N));
@@ -492,47 +495,59 @@ CampusGraph::findMultiStopRoute(int startIdx,
         }
     }
 
-    // 2. 全排列枚举 K 个途经点的最优访问顺序（K ≤ 5）
-    QVector<int> perm;
-    for (int k = 1; k < N; ++k) perm.append(k);  // 1..N-1
+    // 2. 确定访问顺序
+    QVector<int> visitOrder;
 
-    do {
-        double total = 0;
-        total += distMatrix[0][perm[0]];  // 起点 → 第一个途经点
-        for (int i = 0; i < perm.size() - 1; ++i)
-            total += distMatrix[perm[i]][perm[i+1]];
-        total += distMatrix[perm.last()][0];  // 最后一个途经点 → 起点
+    if (sequential) {
+        // 按添加顺序：1, 2, 3, ..., N-1
+        for (int k = 1; k < N; ++k) visitOrder.append(k);
+    } else {
+        // 全排列枚举最优访问顺序（K ≤ 5）
+        QVector<int> perm;
+        for (int k = 1; k < N; ++k) perm.append(k);
+        double bestDist = std::numeric_limits<double>::infinity();
 
-        if (total < best.totalDistance) {
-            best.totalDistance = total;
-            best.visitOrder = perm;
-        }
-    } while (std::next_permutation(perm.begin(), perm.end()));
+        do {
+            double total = distMatrix[0][perm[0]];
+            for (int i = 0; i < perm.size() - 1; ++i)
+                total += distMatrix[perm[i]][perm[i+1]];
+            total += distMatrix[perm.last()][0];
 
-    // 3. 根据最优访问顺序拼接完整路径
-    if (best.visitOrder.isEmpty()) return best;
-
-    best.fullPath.clear();
-    // 起点 → 第一个途经点
-    best.fullPath.append(pathMatrix[0][best.visitOrder[0]]);
-    // 途经点之间
-    for (int i = 0; i < best.visitOrder.size() - 1; ++i) {
-        QVector<int> seg = pathMatrix[best.visitOrder[i]][best.visitOrder[i+1]];
-        if (!seg.isEmpty()) seg.removeFirst();  // 去重连接点
-        best.fullPath.append(seg);
+            if (total < bestDist) {
+                bestDist = total;
+                visitOrder = perm;
+            }
+        } while (std::next_permutation(perm.begin(), perm.end()));
     }
-    // 最后一个途经点 → 返回起点
-    QVector<int> lastSeg = pathMatrix[best.visitOrder.last()][0];
+
+    if (visitOrder.isEmpty()) return result;
+
+    result.visitOrder = visitOrder;
+
+    // 3. 计算总距离
+    result.totalDistance = distMatrix[0][visitOrder[0]];
+    for (int i = 0; i < visitOrder.size() - 1; ++i)
+        result.totalDistance += distMatrix[visitOrder[i]][visitOrder[i+1]];
+    result.totalDistance += distMatrix[visitOrder.last()][0];
+
+    // 4. 拼接完整路径
+    result.fullPath.clear();
+    result.fullPath.append(pathMatrix[0][visitOrder[0]]);
+    for (int i = 0; i < visitOrder.size() - 1; ++i) {
+        QVector<int> seg = pathMatrix[visitOrder[i]][visitOrder[i+1]];
+        if (!seg.isEmpty()) seg.removeFirst();
+        result.fullPath.append(seg);
+    }
+    QVector<int> lastSeg = pathMatrix[visitOrder.last()][0];
     if (!lastSeg.isEmpty()) lastSeg.removeFirst();
-    best.fullPath.append(lastSeg);
+    result.fullPath.append(lastSeg);
 
-    // 验证可达性
-    if (!std::isfinite(best.totalDistance)) {
-        best.fullPath.clear();
-        best.visitOrder.clear();
+    if (!std::isfinite(result.totalDistance)) {
+        result.fullPath.clear();
+        result.visitOrder.clear();
     }
 
-    return best;
+    return result;
 }
 
 inline QVector<NodeInfo> CampusGraph::getLandmarks() const

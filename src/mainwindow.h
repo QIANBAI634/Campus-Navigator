@@ -145,6 +145,7 @@ private:
     QPushButton*   m_finishBtn;
     QPushButton*   m_addStopBtn;
     QPushButton*   m_multiPlanBtn;
+    QComboBox*     m_multiModeSelect;
     QPushButton*   m_clearStopBtn;
     QListWidget*   m_stopList;
     QVector<int>   m_stopIndices;

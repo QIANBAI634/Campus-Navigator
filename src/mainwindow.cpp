@@ -638,10 +638,21 @@ QWidget* MainWindow::createNavigationPanel()
     QHBoxLayout* multiRow = new QHBoxLayout();
     multiRow->setSpacing(8);
 
+    // 多点路线模式选择
+    m_multiModeSelect = new QComboBox();
+    m_multiModeSelect->addItems({"最短路线(自动排序)", "按添加顺序导航"});
+    m_multiModeSelect->setMaximumWidth(170);
+    m_multiModeSelect->setStyleSheet(
+        "QComboBox { background: white; border: 1px solid #cbdde6;"
+        " border-radius: 16px; padding: 4px 10px; font-size: 11px; color: #1f2f38; }"
+        "QComboBox:hover { border-color: #f59e0b; }");
+    m_multiModeSelect->setToolTip("最短路线=算法自动排最优顺序; 按顺序=按添加先后走");
+    multiRow->addWidget(m_multiModeSelect);
+
     m_multiPlanBtn = new QPushButton("🗺️ 规划多点路径");
     m_multiPlanBtn->setStyleSheet(
         "QPushButton { background: #f59e0b; color: white; border: none;"
-        " border-radius: 24px; padding: 9px 16px; font-size: 12px; font-weight: 600; }"
+        " border-radius: 24px; padding: 9px 14px; font-size: 12px; font-weight: 600; }"
         "QPushButton:hover { background: #d97706; }");
     m_multiPlanBtn->setCursor(Qt::PointingHandCursor);
     m_multiPlanBtn->setEnabled(false);
@@ -1755,8 +1766,9 @@ void MainWindow::onPlanMultiStop()
         return;
     }
 
-    // 调用多点路径规划（TSP + 全排列）
-    MultiStopResult result = m_graph.findMultiStopRoute(startIdx, m_stopIndices);
+    // 调用多点路径规划
+    bool sequential = m_multiModeSelect->currentIndex() == 1;
+    MultiStopResult result = m_graph.findMultiStopRoute(startIdx, m_stopIndices, sequential);
 
     if (result.fullPath.isEmpty() || !std::isfinite(result.totalDistance)) {
         m_distanceLabel->setText("📏 多点路径: 不可达");
@@ -1772,7 +1784,8 @@ void MainWindow::onPlanMultiStop()
     QString displayStr = m_graph.formatPathDisplay(landmarkPath);
 
     m_distanceLabel->setText(
-        QString("📏 多点路径: %1 米 (途经 %2 个景点)")
+        QString("📏 多点路径(%1): %2 米 (途经 %3 个景点)")
+            .arg(result.optimal ? "最短路线" : "按顺序")
             .arg(static_cast<int>(result.totalDistance))
             .arg(m_stopIndices.size()));
 
