@@ -446,8 +446,7 @@ inline QVector<int> CampusGraph::filterLandmarkPath(const QVector<int>& indices)
 {
     QVector<int> result;
     for (int idx : indices) {
-        if (m_nodeList[idx].type == "landmark" ||
-            m_nodeList[idx].type == "indoor") {
+        if (m_nodeList[idx].type == "landmark") {
             result.append(idx);
         }
     }
@@ -555,7 +554,7 @@ inline QVector<NodeInfo> CampusGraph::getLandmarks() const
 {
     QVector<NodeInfo> result;
     for (const auto& node : m_nodeList) {
-        if (node.type == "landmark" || node.type == "indoor") {
+        if (node.type == "landmark") {
             result.append(node);
         }
     }
