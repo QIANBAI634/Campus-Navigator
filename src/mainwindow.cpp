@@ -42,6 +42,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_currentDiary.userId = "current_user";
     m_activeCenterIdx = -1;
 
+    // 全局事件过滤器（禁用下拉框滚轮切换 + 图片点击等）
+    qApp->installEventFilter(this);
+
     // 构建 UI
     setupUI();
     applyGlobalStylesheet();
@@ -71,6 +74,11 @@ MainWindow::~MainWindow() {}
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
+    // 禁用所有下拉框的鼠标滚轮切换（防止误触）
+    if (event->type() == QEvent::Wheel) {
+        if (qobject_cast<QComboBox*>(obj))
+            return true;  // 吞掉滚轮事件
+    }
     // 朋友圈时间线中点击图片 → 打开大图预览
     if (event->type() == QEvent::MouseButtonPress) {
         QLabel *label = qobject_cast<QLabel*>(obj);
