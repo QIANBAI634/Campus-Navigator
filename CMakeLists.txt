@@ -30,6 +30,7 @@ add_executable(CampusNavigator
     src/usermanager.cpp
     src/usermanager.h
     src/fooddatabase.h
+    src/huffman.h
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)

@@ -23,6 +23,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include "huffman.h"
 
 // ============================================================
 // 日记分类
@@ -157,7 +158,13 @@ struct DiaryEntry {
     QJsonObject toJson() const {
         QJsonObject obj;
         obj["id"]         = id;
-        obj["content"]    = content;
+        // Huffman 压缩存储（content 字段保存压缩对象，由 fromJson 自动解压）
+        if (content.length() > 8) {
+            obj["content"]     = HuffmanCompressor::compress(content);
+            obj["contentPlain"] = content;  // 保留原文方便调试
+        } else {
+            obj["content"] = content;  // 太短的文本压缩开销大于收益，直接存
+        }
         obj["category"]   = category;
         obj["campusName"] = campusName;
         obj["createdAt"]  = createdAt;
@@ -192,7 +199,12 @@ struct DiaryEntry {
     static DiaryEntry fromJson(const QJsonObject& obj) {
         DiaryEntry entry;
         entry.id           = static_cast<qint64>(obj["id"].toDouble());
-        entry.content      = obj["content"].toString();
+        // content 可能是压缩对象(QJsonObject)或原始字符串(兼容旧数据)
+        if (obj["content"].isObject()) {
+            entry.content = HuffmanCompressor::decompress(obj["content"].toObject());
+        } else {
+            entry.content = obj["content"].toString();
+        }
         entry.category     = obj["category"].toString();
         entry.campusName   = obj["campusName"].toString();
         entry.createdAt    = obj["createdAt"].toString();
