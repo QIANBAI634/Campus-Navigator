@@ -1646,12 +1646,28 @@ void MainWindow::onPlanRoute()
     QVector<int> landmarkPath = m_graph.filterLandmarkPath(fullPath);
     QString displayStr = m_graph.formatPathDisplay(landmarkPath);
 
-    // 标签：区分距离/时间
+    // 标签：区分距离/时间，并附预估时间
+    double distMeters = totalDist;  // Dijkstra返回距离(米)
+    double speedKph = 5.0;  // 默认步行 5km/h
+    QString transportIcon = "🚶";
+    if (strategy == BIKE_ONLY)      { speedKph = 15.0; transportIcon = "🚲"; }
+    else if (strategy == SHUTTLE)   { speedKph = 20.0; transportIcon = "🚌"; }
+
+    double timeSec = (strategy == SHORTEST_TIME)
+        ? totalDist  // SHORTEST_TIME返回的是归一化时间成本，直接当秒显示
+        : distMeters / (speedKph / 3.6);  // 距离÷速度=秒
+
+    int timeMin = static_cast<int>(timeSec) / 60;
+    int timeSecRem = static_cast<int>(timeSec) % 60;
+    QString timeStr = (timeMin > 0)
+        ? QString("%1分%2秒").arg(timeMin).arg(timeSecRem)
+        : QString("%1秒").arg(timeSecRem);
+
     QString metricLabel = (strategy == SHORTEST_TIME) ? "最短时间" : "最短距离";
-    QString metricUnit  = (strategy == SHORTEST_TIME) ? "s"       : "米";
     m_distanceLabel->setText(
-        QString("📏 %1: %2 %3 (%4策略)")
-            .arg(metricLabel).arg(static_cast<int>(totalDist)).arg(metricUnit).arg(stratName));
+        QString("📏 %1: %2 米  |  ⏱ %3 %4 (%5策略)")
+            .arg(metricLabel).arg(static_cast<int>(distMeters))
+            .arg(timeStr).arg(transportIcon).arg(stratName));
 
     m_pathDisplay->setStyleSheet(
         "background:#fefce8; border-left:4px solid #1f6d49;"
@@ -1791,10 +1807,19 @@ void MainWindow::onPlanMultiStop()
     QVector<int> landmarkPath = m_graph.filterLandmarkPath(result.fullPath);
     QString displayStr = m_graph.formatPathDisplay(landmarkPath);
 
+    double multiDist = result.totalDistance;
+    double multiTimeSec = multiDist / (5.0 / 3.6);  // 步行 5km/h
+    int multiMin = static_cast<int>(multiTimeSec) / 60;
+    int multiSec = static_cast<int>(multiTimeSec) % 60;
+    QString multiTimeStr = (multiMin > 0)
+        ? QString("%1分%2秒").arg(multiMin).arg(multiSec)
+        : QString("%1秒").arg(multiSec);
+
     m_distanceLabel->setText(
-        QString("📏 多点路径(%1): %2 米 (途经 %3 个景点)")
+        QString("📏 多点路径(%1): %2 米 | ⏱ %3 🚶 (途经 %4 个景点)")
             .arg(result.optimal ? "最短路线" : "按顺序")
-            .arg(static_cast<int>(result.totalDistance))
+            .arg(static_cast<int>(multiDist))
+            .arg(multiTimeStr)
             .arg(m_stopIndices.size()));
 
     m_pathDisplay->setStyleSheet(
