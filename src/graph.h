@@ -216,12 +216,16 @@ inline void CampusGraph::buildGraph()
         return 0.3 + (h % 71) * 0.01;  // 0.30 ~ 1.00
     };
 
-    // 定义电瓶车路线（固定站点序列）
+    // 定义电瓶车路线（固定路段）
     QSet<QPair<QString,QString>> shuttleEdges;
-    QStringList shuttleStops = {"西门","菜鸟驿站","学生食堂","南门","图书馆","医务室"};
-    for (int i = 0; i < shuttleStops.size() - 1; ++i) {
-        shuttleEdges.insert({shuttleStops[i], shuttleStops[i+1]});
-        shuttleEdges.insert({shuttleStops[i+1], shuttleStops[i]});
+    QStringList shuttlePairs = {
+        "西门","2",  "2","8",  "8","30",  "30","学生食堂",
+        "学生食堂","南门",  "8","11",  "11","南门",  "11","14",
+        "14","医务室",  "8","7",  "7","医务室",  "11","图书馆"
+    };
+    for (int i = 0; i < shuttlePairs.size(); i += 2) {
+        shuttleEdges.insert({shuttlePairs[i], shuttlePairs[i+1]});
+        shuttleEdges.insert({shuttlePairs[i+1], shuttlePairs[i]});
     }
 
     for (const auto& edge : edgesRaw) {
