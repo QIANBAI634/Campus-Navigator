@@ -503,7 +503,6 @@ CampusGraph::findMultiStopRoute(int startIdx,
             double total = distMatrix[0][perm[0]];
             for (int i = 0; i < perm.size() - 1; ++i)
                 total += distMatrix[perm[i]][perm[i+1]];
-            total += distMatrix[perm.last()][0];
 
             if (total < bestDist) {
                 bestDist = total;
@@ -516,13 +515,10 @@ CampusGraph::findMultiStopRoute(int startIdx,
 
     result.visitOrder = visitOrder;
 
-    // 3. 计算总距离
+    // 3. 计算总距离（不返回起点）
     result.totalDistance = distMatrix[0][visitOrder[0]];
     for (int i = 0; i < visitOrder.size() - 1; ++i)
         result.totalDistance += distMatrix[visitOrder[i]][visitOrder[i+1]];
-    // sequential模式: 不返回起点, 终点=最后一个途经点
-    if (!sequential)
-        result.totalDistance += distMatrix[visitOrder.last()][0];
 
     // 4. 拼接完整路径
     result.fullPath.clear();
@@ -531,12 +527,6 @@ CampusGraph::findMultiStopRoute(int startIdx,
         QVector<int> seg = pathMatrix[visitOrder[i]][visitOrder[i+1]];
         if (!seg.isEmpty()) seg.removeFirst();
         result.fullPath.append(seg);
-    }
-    // sequential模式: 不需返回, 最后一个途经点即终点
-    if (!sequential) {
-        QVector<int> lastSeg = pathMatrix[visitOrder.last()][0];
-        if (!lastSeg.isEmpty()) lastSeg.removeFirst();
-        result.fullPath.append(lastSeg);
     }
 
     if (!std::isfinite(result.totalDistance)) {
