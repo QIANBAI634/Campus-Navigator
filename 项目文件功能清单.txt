@@ -1,0 +1,236 @@
+================================================================================
+  校园导航系统 —— 项目文件功能清单
+================================================================================
+  总行数: 6,300+ C++（含头文件）
+  源文件: 8个 .cpp + 8个 .h + 1个 CMakeLists.txt
+  版本: v1.45
+================================================================================
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 一、构建与入口                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  CMakeLists.txt         CMake 构建配置                                       │
+│                         指定 Qt6/Qt5 依赖、源文件列表、编译选项             │
+│                         共 48 行                                            │
+│                                                                             │
+│  src/main.cpp           程序入口                                            │
+│                         创建 QApplication、设置全局 Tooltip 样式、          │
+│                         创建 MainWindow 实例                                │
+│                         共 40 行                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 二、核心算法层                                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/graph.h            校园图结构与最短路径算法【核心文件，550行】           │
+│                         ┌──────────────────────────────────────┐            │
+│                         │ struct Edge          邻接表边         │            │
+│                         │   to/weight/congestion/allowBike/isShuttle        │
+│                         │                                        │            │
+│                         │ enum RouteStrategy    四种路线策略     │            │
+│                         │   SHORTEST_DISTANCE / SHORTEST_TIME                │
+│                         │   / BIKE_ONLY / SHUTTLE               │            │
+│                         │                                        │            │
+│                         │ struct NearbyFacility  设施查询结果    │            │
+│                         │ struct MultiStopResult 多点路径结果    │            │
+│                         │                                        │            │
+│                         │ CampusGraph 类方法:                     │            │
+│                         │   buildGraph()        建立邻接表       │            │
+│                         │   haversineDistance()  球面距离公式    │            │
+│                         │   dijkstra(strategy)   四种Dijkstra    │            │
+│                         │   reconstructPath()    路径重构        │            │
+│                         │   filterLandmarkPath() 过滤路口节点    │            │
+│                         │   formatPathDisplay()  路径格式化      │            │
+│                         │   findNearbyFacilities() 附近设施查询  │            │
+│                         │   findMultiStopRoute() 途经多点TSP     │            │
+│                         │   getLandmarks()       获取地标列表    │            │
+│                         └──────────────────────────────────────┘            │
+│                                                                             │
+│  src/huffman.h          Huffman 无损压缩算法【独立模块，350行】              │
+│                         ┌──────────────────────────────────────┐            │
+│                         │ struct HuffNode      Huffman树节点   │            │
+│                         │   ch/freq/left/right                 │            │
+│                         │                                        │            │
+│                         │ class HuffmanCompressor 静态方法:      │            │
+│                         │   compress(text)      压缩→JSON      │            │
+│                         │   decompress(packed)   解压→原文      │            │
+│                         │   buildFreqMap()       统计字符频率    │            │
+│                         │   buildTree()          小顶堆建树     │            │
+│                         │   buildCodeTable()     递归前缀码     │            │
+│                         │   encodeToBits()       编码为01串     │            │
+│                         │   packBits()           按大端序打包    │            │
+│                         │   unpackBits()         字节还原位串    │            │
+│                         │   decodeFromBits()     逐位走树解码    │            │
+│                         │   huffHeapPush/Pop()   自实现小顶堆    │            │
+│                         └──────────────────────────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 三、数据层                                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/navigationdata.h    导航数据定义头文件                 [30行]            │
+│                          定义 NodeInfo(struct) / EdgeInfo(struct)            │
+│                          声明 nodesData / edgesRaw 全局数组                  │
+│                                                                             │
+│  src/navigationdata.cpp  导航数据实现                      [340行]           │
+│                          79个节点: 46地标 + 34路口（真实北邮沙河数据）       │
+│                          200+条道路边（含电瓶车专用路段）                    │
+│                          设施类型: 出入口/餐饮/购物/住宿/教学/行政/         │
+│                                    运动/医疗/学习/休闲/卫生/金融/邮政       │
+│                                                                             │
+│  src/campusdatabase.h    景区/校园数据库定义               [55行]            │
+│                          定义 CampusInfo(struct) / CampusType常量            │
+│                          声明 getAllCampuses()                              │
+│                                                                             │
+│  src/campusdatabase.cpp  景区/校园数据库实现               [260行]           │
+│                          200个目的地数据: 39所985 + 北京211 +               │
+│                          景点/公园/医院/商场/文化场所/交通枢纽              │
+│                          每个含 name/type/city/district/heat/               │
+│                           rating/lat/lng/tags 字段                           │
+│                                                                             │
+│  src/fooddatabase.h      美食数据库                        [240行]           │
+│                          9种菜系 x 28种默认美食                              │
+│                          FoodData命名空间: loadAll/saveAll/topK/             │
+│                          setRating/addUserFood/regenerateAll                │
+│                          QMap防刷分评分机制                                  │
+│                          堆Top-K美食推荐                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 四、管理层                                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/diarymanager.h      日记管理器定义                    [280行]            │
+│                          定义 DiaryEntry / PhotoAttachment / TrackPoint     │
+│                          定义 DiaryManager 类                                │
+│                          含预览规则(≤8字全文,>8字前6字+...)                  │
+│                          QMap userRatings 一人一票                           │
+│                          Huffman压缩解压集成                                  │
+│                                                                             │
+│  src/diarymanager.cpp    日记管理器实现                    [260行]            │
+│                          草稿CRUD + 已发布日记管理                            │
+│                          Top-K搜索推荐 + 目的地搜索                          │
+│                          前缀精确查找                                        │
+│                          JSON序列化/反序列化                                  │
+│                                                                             │
+│  src/usermanager.h       用户管理器定义                     [82行]            │
+│                          定义 UserInfo / UserManager                         │
+│                                                                             │
+│  src/usermanager.cpp     用户管理器实现                     [80行]            │
+│                          10个预设用户: 小明/小红/骑行侠阿飞/文艺青年小雅等   │
+│                          JSON持久化到 data/users.json                        │
+│                          用户切换/新建/删除                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 五、UI层                                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/mainwindow.h        主窗口头文件                      [180行]            │
+│                          声明所有 UI 元素、槽函数、数据成员                  │
+│                                                                             │
+│  src/mainwindow.cpp      主窗口实现                        [2400行]           │
+│                          包含以下内部逻辑:                                   │
+│                          ┌──────────────────────────────────────┐            │
+│                          │ QStackedWidget 四标签页布局          │            │
+│                          │   Page 0: 导航（起点/终点/策略/途经点/地图/结果）│
+│                          │   Page 1: 推荐（景区Top-10 + 美食Top-10 + 评分）│
+│                          │   Page 2: 查询（所在地/范围/类别 + 地图高亮）    │
+│                          │   Page 3: 日记（编辑/草稿/发布/搜索）            │
+│                          │                                        │            │
+│                          │ 底部标签栏: 🧭导航 🎯推荐 🔍查询 📝日记│            │
+│                          │                                        │            │
+│                          │ 旅游推荐: heapSiftDown + topKCampuses  │            │
+│                          │ 场所查询: onQueryNearbyFacilities      │            │
+│                          │ 美食推荐: createFoodPanel / onFoodTopK │            │
+│                          │ 美食评分: 三级联动createFoodRatingPanel│            │
+│                          │ 日记搜索: onRecommendDiaries/          │            │
+│                          │          onSearchDiaryDest/            │            │
+│                          │          onSearchDiaryTitle            │            │
+│                          │ 日记详情: showDiaryDetail              │            │
+│                          │ 途经点:   onAddStop/onClearStops/      │            │
+│                          │          onPlanMultiStop               │            │
+│                          │                                        │            │
+│                          │ 全局事件过滤器: 拦截QComboBox滚轮      │            │
+│                          └──────────────────────────────────────┘            │
+│                                                                             │
+│  src/mapwidget.h         地图组件头文件                     [90行]            │
+│                          声明 MapWidget（QGraphicsView 子类）                │
+│                                                                             │
+│  src/mapwidget.cpp       地图组件实现                      [180行]            │
+│                          QGraphicsScene 渲染地图图片                         │
+│                          placeLandmarkDots() 各色圆点标注地标                │
+│                          drawNavigationPath() 蓝线路径+起终点标记            │
+│                          highlightFacilities() 设施金色圆环高亮              │
+│                          mouseMoveEvent 光标悬浮显示设施信息                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 六、静态资源                                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  assets/ 北邮校园地图.jpg   北邮沙河校区卫星地图 (1600×1143, 547KB)           │
+│                             所有节点 pixelX/pixelY 坐标基于此图             │
+│                                                                             │
+│  data/ users.json          10个用户的注册信息                                │
+│     /   published.json     全局共享的已发布日记                              │
+│     /   foods.json         美食数据（评分/菜系/美食名）                      │
+│     /   user_*/drafts.json 各用户独立草稿目录                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 七、关键结构体一览                                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  struct Edge        (graph.h:29)      邻接边: to/weight/congestion/         │
+│                                         allowBike/isShuttle                  │
+│  struct NodeInfo    (navigationdata.h:14) 节点: name/lng/lat/type/          │
+│                                         pixelX/pixelY/facilityType          │
+│  struct CampusInfo  (campusdatabase.h:31) 景区: name/type/city/heat/        │
+│                                         rating/lat/lng/tags                  │
+│  struct DiaryEntry  (diarymanager.h:113) 日记: id/content/category/         │
+│                                         photos/trackPoints/userRatings/     │
+│                                         views + Huffman压缩                  │
+│  struct UserInfo    (usermanager.h:21)  用户: userId/nickname/avatar         │
+│  struct FoodItem    (fooddatabase.h:16) 美食: name/cuisine/location/        │
+│                                         userRatings(QMap防刷分)             │
+│  struct HuffNode    (huffman.h:16)      Huffman树节点: ch/freq/left/right   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 八、核心数据结构的实现位置                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  数据结构          │  文件          │  函数/行号                            │
+│  ──────────────────┼────────────────┼──────────────────────────────────────│
+│  邻接表(图)        │  graph.h       │  struct Edge + buildGraph()          │
+│  Dijkstra          │  graph.h       │  dijkstra() 第325行/第370行          │
+│  堆排序(Top-K)     │  mainwindow.cpp│  heapSiftDown() 第812行              │
+│  堆排序(日记)      │  diarymanager.cpp│ diaryHeapSiftDown() 第170行        │
+│  堆排序(美食)      │  fooddatabase.h│  foodHeapSiftDown()                  │
+│  全排列(TSP)       │  graph.h       │  findMultiStopRoute() 第460行       │
+│  Haversine距离     │  graph.h       │  haversineDistance() 第312行        │
+│  Huffman压缩       │  huffman.h     │  HuffmanCompressor 全部             │
+│  QMap评分(日记)    │  diarymanager.h│  userRatings 第125行                 │
+│  QMap评分(美食)    │  fooddatabase.h│  userRatings 第26行                  │
+│  JSON序列化        │  diarymanager.h│  toJson()/fromJson()                 │
+│  事件过滤器        │  mainwindow.cpp│  eventFilter() 第57行               │
+│  四标签页UI        │  mainwindow.cpp│  setupUI() 第193行                   │
+│  地图渲染          │  mapwidget.cpp │  QGraphicsView 全面                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+  完
+================================================================================
