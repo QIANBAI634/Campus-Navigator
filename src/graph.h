@@ -224,16 +224,6 @@ inline void CampusGraph::buildGraph()
         shuttleEdges.insert({shuttleStops[i+1], shuttleStops[i]});
     }
 
-    // 定义主干道节点（自行车可通行）
-    QSet<QString> mainRoadNodes = {
-        "西门","菜鸟驿站","篮球场","体育场","打印店","雁北园","风味食堂",
-        "学生活动中心","综合办公楼","雁南园","公共教学楼","学生食堂","南门",
-        "教学实验综合楼N楼","教学实验综合楼S楼","图书馆","医务室","网安院","数媒院",
-        "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15",
-        "16","17","18","19","20","21","22","23","24","25","26","27","28",
-        "29","30","31","32","33","34"
-    };
-
     for (const auto& edge : edgesRaw) {
         int fromIdx = m_nodeIndexMap.value(edge.from, -1);
         int toIdx   = m_nodeIndexMap.value(edge.to, -1);
@@ -246,13 +236,11 @@ inline void CampusGraph::buildGraph()
                                      toNode.lng, toNode.lat);
 
         bool isShuttle = shuttleEdges.contains({edge.from, edge.to});
-        bool onMainRoad = mainRoadNodes.contains(edge.from) &&
-                          mainRoadNodes.contains(edge.to);
         double cong = edgeHash(fromIdx, toIdx);
 
-        // 无向边：双向添加
-        m_adj[fromIdx].push_back({toIdx, w, cong, onMainRoad, isShuttle});
-        m_adj[toIdx].push_back({fromIdx, w, cong, onMainRoad, isShuttle});
+        // 无向边：双向添加（所有边均可自行车）
+        m_adj[fromIdx].push_back({toIdx, w, cong, true, isShuttle});
+        m_adj[toIdx].push_back({fromIdx, w, cong, true, isShuttle});
         ++m_edgeCount;
     }
 
