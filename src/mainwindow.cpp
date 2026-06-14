@@ -13,6 +13,7 @@
 #include <QButtonGroup>
 #include <QGridLayout>
 #include <QMouseEvent>
+#include <QSet>
 
 // ============================================================
 // 构造函数 & 析构函数
@@ -1803,9 +1804,23 @@ void MainWindow::onPlanMultiStop()
         return;
     }
 
-    // 过滤显示
+    // 过滤显示 — 标注途经点
     QVector<int> landmarkPath = m_graph.filterLandmarkPath(result.fullPath);
-    QString displayStr = m_graph.formatPathDisplay(landmarkPath);
+    // 在途经点位置插入【📍途经】标记
+    QStringList displayParts;
+    const auto& nodes = m_graph.nodes();
+    QSet<int> stopSet(m_stopIndices.begin(), m_stopIndices.end());
+    QSet<int> shownStops;  // 已经标注过的途经点
+
+    for (int idx : landmarkPath) {
+        if (stopSet.contains(idx) && !shownStops.contains(idx)) {
+            displayParts.append(QString("【📍%1】").arg(nodes[idx].name));
+            shownStops.insert(idx);
+        } else {
+            displayParts.append(nodes[idx].name);
+        }
+    }
+    QString displayStr = displayParts.join("  →  ");
 
     double multiDist = result.totalDistance;
     double multiTimeSec = multiDist / (5.0 / 3.6);  // 步行 5km/h
